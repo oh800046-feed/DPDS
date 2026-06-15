@@ -684,8 +684,21 @@ body.dark .topbar {
 }
 .dpds-sync-save,
 .dpds-sync-load {
+  width: 76px;
+  height: 42px;
+  justify-content: center;
+  flex-direction: column;
+  gap: 1px;
+  padding: 4px 8px;
   font-weight: 800;
   letter-spacing: .01em;
+  line-height: 1.12;
+  text-align: center;
+  white-space: normal;
+}
+.dpds-sync-save span,
+.dpds-sync-load span {
+  display: block;
 }
 .dpds-sync-save {
   background: var(--ink);
@@ -2647,8 +2660,8 @@ body[data-width="full"]     { --content-max: none; }
         <span class="realdata-pill" id="realDataPill" data-tip="현재 적용된 데이터 출처">
           <span class="dot"></span>실데이터 적용됨
         </span>
-        <button class="btn-icon dpds-sync-save" id="dpdsOnlineSaveBtn" onclick="saveDpdsCurrentStateToSupabase()" data-tip="현재 DPDS 화면 상태와 계산 결과를 Supabase에 저장합니다.">💾 온라인 저장하기</button>
-        <button class="btn-icon dpds-sync-load" id="dpdsOnlineLoadBtn" onclick="loadDpdsLatestFromSupabaseButton()" data-tip="Supabase에 저장된 최신 DPDS 결과를 불러옵니다.">↻ 온라인 불러오기</button>
+        <button class="btn-icon dpds-sync-save" id="dpdsOnlineSaveBtn" onclick="saveDpdsCurrentStateToSupabase()" data-tip="현재 DPDS 화면 상태와 계산 결과를 Supabase에 저장합니다."><span>온라인</span><span>저장하기</span></button>
+        <button class="btn-icon dpds-sync-load" id="dpdsOnlineLoadBtn" onclick="loadDpdsLatestFromSupabaseButton()" data-tip="Supabase에 저장된 최신 DPDS 결과를 불러옵니다."><span>온라인</span><span>불러오기</span></button>
         <button class="dark-toggle" id="darkBtn" onclick="toggleDark()" data-tip="다크모드 전환 (어두운 환경/장시간 사용 시)">☾ Dark</button>
         <button class="btn-icon" onclick="exportLog()" data-tip="클릭·조정·결재 감사로그 CSV 다운로드 (자동 저장, 5년 보관용)">📋 감사로그</button>
         <div class="print-menu" data-tip="인쇄 또는 PDF 저장">
