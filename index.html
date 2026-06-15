@@ -682,6 +682,37 @@ body.dark .topbar {
   border-color: var(--ink-3);
   color: var(--ink);
 }
+.dpds-sync-save,
+.dpds-sync-load {
+  font-weight: 800;
+  letter-spacing: .01em;
+}
+.dpds-sync-save {
+  background: var(--ink);
+  color: #fff;
+  border-color: var(--ink);
+}
+.dpds-sync-save:hover {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.dpds-sync-load {
+  background: #dc2626;
+  color: #fff;
+  border-color: #b91c1c;
+  box-shadow: 0 8px 18px rgba(220, 38, 38, .22);
+}
+.dpds-sync-load:hover {
+  background: #b91c1c;
+  border-color: #991b1b;
+  color: #fff;
+}
+body.dark .dpds-sync-load {
+  background: #ef4444;
+  border-color: #f87171;
+  color: #fff;
+}
 .btn-pill.primary {
   background: var(--accent);
   color: #fff;
@@ -2616,6 +2647,8 @@ body[data-width="full"]     { --content-max: none; }
         <span class="realdata-pill" id="realDataPill" data-tip="현재 적용된 데이터 출처">
           <span class="dot"></span>실데이터 적용됨
         </span>
+        <button class="btn-icon dpds-sync-save" id="dpdsOnlineSaveBtn" onclick="saveDpdsCurrentStateToSupabase()" data-tip="현재 DPDS 화면 상태와 계산 결과를 Supabase에 저장합니다.">💾 온라인 저장하기</button>
+        <button class="btn-icon dpds-sync-load" id="dpdsOnlineLoadBtn" onclick="loadDpdsLatestFromSupabaseButton()" data-tip="Supabase에 저장된 최신 DPDS 결과를 불러옵니다.">↻ 온라인 불러오기</button>
         <button class="dark-toggle" id="darkBtn" onclick="toggleDark()" data-tip="다크모드 전환 (어두운 환경/장시간 사용 시)">☾ Dark</button>
         <button class="btn-icon" onclick="exportLog()" data-tip="클릭·조정·결재 감사로그 CSV 다운로드 (자동 저장, 5년 보관용)">📋 감사로그</button>
         <div class="print-menu" data-tip="인쇄 또는 PDF 저장">
@@ -14011,6 +14044,97 @@ async function loadLatestDpdsResultFromSupabase() {
   }
 }
 
+async function saveDpdsCurrentStateToSupabase() {
+  if (!window.supabaseClient) {
+    if (typeof showToast === 'function') showToast('Supabase 연결 설정을 확인해 주세요.', 'err');
+    return false;
+  }
+
+  const btn = document.getElementById('dpdsOnlineSaveBtn');
+  const oldText = btn ? btn.innerHTML : '';
+  if (btn) { btn.disabled = true; btn.innerHTML = '저장 중...'; }
+
+  try {
+    const payload = {
+      fileName: DATA && DATA.fileName ? DATA.fileName : 'manual-save',
+      uploadedAt: new Date().toISOString(),
+      source: 'manual-save',
+      data: DATA,
+      state: STATE,
+      summary: {
+        currentMonth: DATA && DATA.currentMonth || null,
+        skuCount: DATA && DATA.skuCount || 0,
+        rowsActual: DATA && DATA.rowsActual || 0,
+        rowsExec: DATA && DATA.rowsExec || 0,
+        rowsPlan: DATA && DATA.rowsPlan || 0,
+        agg: DATA && DATA.agg || null
+      }
+    };
+
+    const { error } = await window.supabaseClient
+      .from('dpds_uploads')
+      .insert({
+        file_name: payload.fileName,
+        file_path: null,
+        current_month: payload.summary.currentMonth,
+        sku_count: payload.summary.skuCount,
+        result: payload,
+        state: STATE,
+        is_active: true
+      });
+
+    if (error) throw error;
+    if (typeof showToast === 'function') showToast('온라인 저장 완료 — 다른 사용자도 불러올 수 있습니다.', 'ok');
+    return true;
+  } catch (err) {
+    console.error('Supabase 수동 저장 실패:', err);
+    if (typeof showToast === 'function') showToast('온라인 저장 실패: ' + err.message, 'err');
+    return false;
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = oldText; }
+  }
+}
+
+async function loadDpdsLatestFromSupabaseButton() {
+  if (!window.supabaseClient) {
+    if (typeof showToast === 'function') showToast('Supabase 연결 설정을 확인해 주세요.', 'err');
+    return false;
+  }
+
+  const btn = document.getElementById('dpdsOnlineLoadBtn');
+  const oldText = btn ? btn.innerHTML : '';
+  if (btn) { btn.disabled = true; btn.innerHTML = '불러오는 중...'; }
+
+  try {
+    const { data, error } = await window.supabaseClient
+      .from('dpds_uploads')
+      .select('*')
+      .eq('is_active', true)
+      .order('uploaded_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (error) throw error;
+    if (!data) {
+      if (typeof showToast === 'function') showToast('불러올 온라인 데이터가 없습니다.', 'err');
+      return false;
+    }
+
+    if (data.result && data.result.data && typeof DATA !== 'undefined') Object.assign(DATA, data.result.data);
+    if (data.state && typeof STATE !== 'undefined') Object.assign(STATE, data.state);
+
+    if (typeof recomputeAndRefresh === 'function') recomputeAndRefresh();
+    if (typeof save === 'function') save();
+    if (typeof showToast === 'function') showToast(`온라인 데이터 불러오기 완료: ${data.file_name}`, 'ok');
+    return true;
+  } catch (err) {
+    console.error('Supabase 수동 불러오기 실패:', err);
+    if (typeof showToast === 'function') showToast('온라인 불러오기 실패: ' + err.message, 'err');
+    return false;
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = oldText; }
+  }
+}
 function subscribeDpdsRealtime() {
   if (!window.supabaseClient) return;
 
