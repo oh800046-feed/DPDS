@@ -14109,7 +14109,7 @@ async function saveDpdsCurrentStateToSupabase() {
       });
 
     if (error) throw error;
-    if (typeof showToast === 'function') showToast('온라인 저장 완료 — 다른 사용자도 불러올 수 있습니다.', 'ok');
+    if (typeof showToast === 'function') showToast('온라인 저장 완료', 'ok');
     return true;
   } catch (err) {
     console.error('Supabase 수동 저장 실패:', err);
