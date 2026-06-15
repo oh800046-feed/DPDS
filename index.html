@@ -14077,7 +14077,8 @@ async function saveDpdsCurrentStateToSupabase() {
 
   const btn = document.getElementById('dpdsOnlineSaveBtn');
   const oldText = btn ? btn.innerHTML : '';
-  if (btn) { btn.disabled = true; btn.innerHTML = '저장 중...'; }
+  let saved = false;
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span>온라인</span><span>저장중</span>'; }
 
   try {
     const payload = {
@@ -14109,6 +14110,8 @@ async function saveDpdsCurrentStateToSupabase() {
       });
 
     if (error) throw error;
+    saved = true;
+    if (btn) btn.innerHTML = '<span>온라인</span><span>저장완료</span>';
     if (typeof showToast === 'function') showToast('온라인 저장 완료', 'ok');
     return true;
   } catch (err) {
@@ -14116,7 +14119,10 @@ async function saveDpdsCurrentStateToSupabase() {
     if (typeof showToast === 'function') showToast('온라인 저장 실패: ' + err.message, 'err');
     return false;
   } finally {
-    if (btn) { btn.disabled = false; btn.innerHTML = oldText; }
+    if (btn) {
+      btn.disabled = false;
+      if (!saved) btn.innerHTML = oldText;
+    }
   }
 }
 
@@ -14157,7 +14163,10 @@ async function loadDpdsLatestFromSupabaseButton() {
     if (typeof showToast === 'function') showToast('온라인 불러오기 실패: ' + err.message, 'err');
     return false;
   } finally {
-    if (btn) { btn.disabled = false; btn.innerHTML = oldText; }
+    if (btn) {
+      btn.disabled = false;
+      if (!saved) btn.innerHTML = oldText;
+    }
   }
 }
 function subscribeDpdsRealtime() {
