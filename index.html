@@ -12640,16 +12640,20 @@ function renderUploadValidationContent() {
     const a = actM[key]?.total || 0;
     const e = execM[key]?.total || 0;
     const o = outM[key]?.total || 0;
+    const fmtKpi = (value) => Number(value || 0).toLocaleString('ko-KR', {
+      minimumFractionDigits: decimals,
+      maximumFractionDigits: decimals
+    });
     const ach = p > 0 ? (o / p * 100) : 0;
     const gap = o - p;
     const achColor = ach >= 95 ? 'var(--success)' : (ach >= 85 ? 'var(--gold)' : 'var(--danger)');
     return `<tr>
       <td style="font-weight: 600;">${label}</td>
-      <td style="text-align:right; font-family:var(--font-mono);">${(p / divider).toFixed(decimals)}</td>
-      <td style="text-align:right; font-family:var(--font-mono); color: var(--ink-3);">${(a / divider).toFixed(decimals)}</td>
-      <td style="text-align:right; font-family:var(--font-mono); color: var(--ink-3);">${(e / divider).toFixed(decimals)}</td>
-      <td style="text-align:right; font-family:var(--font-mono); font-weight: 700; color: var(--accent);">${(o / divider).toFixed(decimals)}</td>
-      <td style="text-align:right; font-family:var(--font-mono); color: ${gap >= 0 ? 'var(--success)' : 'var(--danger)'}; font-weight: 700;">${gap >= 0 ? '+' : ''}${(gap / divider).toFixed(decimals)}</td>
+      <td style="text-align:right; font-family:var(--font-mono);">${fmtKpi(p / divider)}</td>
+      <td style="text-align:right; font-family:var(--font-mono); color: var(--ink-3);">${fmtKpi(a / divider)}</td>
+      <td style="text-align:right; font-family:var(--font-mono); color: var(--ink-3);">${fmtKpi(e / divider)}</td>
+      <td style="text-align:right; font-family:var(--font-mono); font-weight: 700; color: var(--accent);">${fmtKpi(o / divider)}</td>
+      <td style="text-align:right; font-family:var(--font-mono); color: ${gap >= 0 ? 'var(--success)' : 'var(--danger)'}; font-weight: 700;">${gap >= 0 ? '+' : ''}${fmtKpi(gap / divider)}</td>
       <td style="text-align:right; font-family:var(--font-mono); color: ${achColor}; font-weight: 700;">${ach.toFixed(1)}%</td>
     </tr>`;
   };
@@ -12828,16 +12832,20 @@ function renderStatusCompare() {
     const a = actM[key]?.total || 0;
     const e = execM[key]?.total || 0;
     const o = outM[key]?.total || 0;
+    const fmtKpi = (value) => Number(value || 0).toLocaleString('ko-KR', {
+      minimumFractionDigits: decimals,
+      maximumFractionDigits: decimals
+    });
     const ach = p > 0 ? (o / p * 100) : 0;
     const gap = o - p;
     const achColor = ach >= 95 ? 'var(--success)' : (ach >= 85 ? 'var(--gold)' : 'var(--danger)');
     return `<tr>
       <td style="font-weight: 600;">${label}</td>
-      <td class="num">${(p / divider).toFixed(decimals)}</td>
-      <td class="num" style="color: var(--ink-3);">${(a / divider).toFixed(decimals)}</td>
-      <td class="num" style="color: var(--ink-3);">${(e / divider).toFixed(decimals)}</td>
-      <td class="num" style="color: var(--accent); font-weight: 700;">${(o / divider).toFixed(decimals)}</td>
-      <td class="num" style="color: ${gap >= 0 ? 'var(--success)' : 'var(--danger)'}; font-weight: 600;">${gap >= 0 ? '+' : ''}${(gap / divider).toFixed(decimals)}</td>
+      <td class="num">${fmtKpi(p / divider)}</td>
+      <td class="num" style="color: var(--ink-3);">${fmtKpi(a / divider)}</td>
+      <td class="num" style="color: var(--ink-3);">${fmtKpi(e / divider)}</td>
+      <td class="num" style="color: var(--accent); font-weight: 700;">${fmtKpi(o / divider)}</td>
+      <td class="num" style="color: ${gap >= 0 ? 'var(--success)' : 'var(--danger)'}; font-weight: 600;">${gap >= 0 ? '+' : ''}${fmtKpi(gap / divider)}</td>
       <td class="num" style="color: ${achColor}; font-weight: 700;">${ach.toFixed(1)}%</td>
     </tr>`;
   };
@@ -13260,20 +13268,24 @@ function renderDataSummary() {
     const a = actM[key]?.total || 0;
     const e = execM[key]?.total || 0;
     const o = outM[key]?.total || 0;
+    const fmtKpi = (value) => Number(value || 0).toLocaleString('ko-KR', {
+      minimumFractionDigits: decimals,
+      maximumFractionDigits: decimals
+    });
     const ach = p > 0 ? Math.round(o / p * 100) : 0;
     const achClass = ach >= 95 ? 'ok' : (ach >= 85 ? 'warn' : 'danger');
     const cellClass = isOp ? 'kpi-cell kpi-op' : 'kpi-cell';
     return `<div class="${cellClass}">
       <div class="kpi-label">${label}</div>
       <div class="kpi-main">
-        <span class="kpi-value">${(o / divider).toFixed(decimals)}</span>
+        <span class="kpi-value">${fmtKpi(o / divider)}</span>
         <span class="kpi-unit">${unit}</span>
       </div>
       <div class="kpi-ach ${achClass}">달성률 ${ach}%</div>
       <div class="kpi-detail">
-        <span class="lbl">사업계획</span><span class="val">${(p / divider).toFixed(decimals)} ${unit}</span>
-        <span class="lbl">실적 (1~${cm}월)</span><span class="val">${(a / divider).toFixed(decimals)}</span>
-        <span class="lbl">실행계획</span><span class="val">${(e / divider).toFixed(decimals)}</span>
+        <span class="lbl">사업계획</span><span class="val">${fmtKpi(p / divider)} ${unit}</span>
+        <span class="lbl">실적 (1~${cm}월)</span><span class="val">${fmtKpi(a / divider)}</span>
+        <span class="lbl">실행계획</span><span class="val">${fmtKpi(e / divider)}</span>
       </div>
     </div>`;
   };
