@@ -5274,6 +5274,78 @@ function buildScheduleMonths(startMonth, rounds) {
   return months;
 }
 
+function _getConfiguredStartMonth() {
+  const manual = parseInt(STATE.startMonthOverride, 10);
+  if (manual >= 1 && manual <= 12) return manual;
+  const timingLv = AXES.timing.levels[STATE.axes.timing]?.v || 1;
+  return Math.min(12, Math.max(1, 4 + timingLv));
+}
+
+function _applyStartMonthToScheduleRows(rows, startMonth) {
+  if (!Array.isArray(rows) || !rows.length) return rows;
+  const months = buildScheduleMonths(startMonth, rows.length);
+  rows.forEach((row, i) => {
+    row.round = i + 1;
+    row.month = Math.min(12, months[i]);
+  });
+  return rows;
+}
+
+function _clonePlain(obj) {
+  return obj == null ? obj : JSON.parse(JSON.stringify(obj));
+}
+
+function _snapshotPricingState() {
+  return {
+    catManualAmounts: _clonePlain(STATE.catManualAmounts),
+    catManualAmountsByLevel: _clonePlain(STATE.catManualAmountsByLevel),
+    catNoIncrease: _clonePlain(STATE.catNoIncrease),
+    manualSchedule: _clonePlain(STATE.manualSchedule),
+    catSchedules: _clonePlain(STATE.catSchedules)
+  };
+}
+
+function _restorePricingState(snap) {
+  if (!snap) return;
+  STATE.catManualAmounts = _clonePlain(snap.catManualAmounts);
+  STATE.catManualAmountsByLevel = _clonePlain(snap.catManualAmountsByLevel) || {};
+  STATE.catNoIncrease = _clonePlain(snap.catNoIncrease) || {};
+  STATE.manualSchedule = _clonePlain(snap.manualSchedule);
+  STATE.catSchedules = _clonePlain(snap.catSchedules) || {};
+}
+
+function _ensurePricingLevelAmountCache() {
+  if (!STATE.catManualAmountsByLevel || typeof STATE.catManualAmountsByLevel !== 'object' || Array.isArray(STATE.catManualAmountsByLevel)) {
+    STATE.catManualAmountsByLevel = {};
+  }
+}
+
+function _saveCurrentPricingLevelAmounts() {
+  _ensurePricingLevelAmountCache();
+  const level = _getPricingGroupLevel();
+  STATE.catManualAmountsByLevel[level] = _clonePlain(STATE.catManualAmounts);
+}
+
+function _getCachedPricingLevelAmounts(level) {
+  _ensurePricingLevelAmountCache();
+  return _clonePlain(STATE.catManualAmountsByLevel[level]);
+}
+
+function _setCachedPricingLevelAmounts(level, amounts) {
+  _ensurePricingLevelAmountCache();
+  STATE.catManualAmountsByLevel[level] = _clonePlain(amounts);
+}
+
+function _solvePricingAmountsForLevel(level, targetAchPct) {
+  const savedLevel = STATE.pricingGroupLevel;
+  STATE.pricingGroupLevel = level === 'mid' ? 'mid' : 'cat';
+  try {
+    return _solveCatAmountsForAchievement(targetAchPct);
+  } finally {
+    STATE.pricingGroupLevel = savedLevel;
+  }
+}
+
 const AXES = {
   amount: {
     label: '조정폭', unit: '원/kg',
@@ -5404,10 +5476,13 @@ let STATE = {
   execChecks: { ec1: false, ec2: false, ec3: false, ec4: false, ec5: false },  // 실행 체크리스트
   scenario: 'balanced',
   amountOverride: null,          // v38: 시나리오 목표달성률 역산 조정폭(원/kg). null이면 슬라이더 레벨 사용
+  startMonthOverride: null,      // 최초 적용 시기(1차 조정월) 직접 입력값. null이면 timing 축 기본값 사용
+  pricingScenarioTarget: null,   // 마지막 시나리오 목표 달성률. 5축 조정 후 중분류 역산 캐시 유지용
   decisions: [],
   decisionStatus: 'pending',
   realdata: false,
   catManualAmounts: null,        // 수기 입력 조정폭 (대분류 또는 대분류|중분류)
+  catManualAmountsByLevel: {},    // 조정 단위별 수기/시나리오 조정폭 캐시 {cat:{...}, mid:{...}}
   catNoIncrease: {},             // MODE 2 조정 미적용 여부 {양계:true, 양계|산란계:true, ...}
   pricingGroupLevel: 'cat',      // MODE 2 조정 단위: cat=대분류, mid=중분류
   churnHistoryOption: { enabled: false, rows: [], uploadedAt: null }, // 거래처 이탈 고도화 옵션
@@ -5462,8 +5537,17 @@ function restore() {
   }
   if (!STATE.catSchedules || typeof STATE.catSchedules !== 'object' || Array.isArray(STATE.catSchedules)) STATE.catSchedules = {};
   if (!STATE.catNoIncrease || typeof STATE.catNoIncrease !== 'object' || Array.isArray(STATE.catNoIncrease)) STATE.catNoIncrease = {};
+  if (!STATE.catManualAmountsByLevel || typeof STATE.catManualAmountsByLevel !== 'object' || Array.isArray(STATE.catManualAmountsByLevel)) STATE.catManualAmountsByLevel = {};
   if (STATE.pricingGroupLevel !== 'mid') STATE.pricingGroupLevel = 'cat';
   if (typeof STATE.roundIntervalRuleEnabled !== 'boolean') STATE.roundIntervalRuleEnabled = true;
+  if (STATE.startMonthOverride != null) {
+    const sm = parseInt(STATE.startMonthOverride, 10);
+    STATE.startMonthOverride = (sm >= 1 && sm <= 12) ? sm : null;
+  }
+  if (STATE.pricingScenarioTarget != null) {
+    const pct = parseFloat(STATE.pricingScenarioTarget);
+    STATE.pricingScenarioTarget = Number.isFinite(pct) ? pct : null;
+  }
   if (!STATE.churnHistoryOption || typeof STATE.churnHistoryOption !== 'object') STATE.churnHistoryOption = { enabled: false, rows: [], uploadedAt: null };
   if (!Array.isArray(STATE.churnHistoryOption.rows)) STATE.churnHistoryOption.rows = [];
   // v32: 비연동 제품 필터 (true 시 연동제="Y"/"O"/"연동" 행 제외, 비연동 제품에만 인상·인하 적용)
@@ -5876,7 +5960,7 @@ function compute() {
   // === 최초 인상 가능 월: 실적이 있으면 currentMonth + 2가 하한 ===
   // 예) 4월 실적이 5월에 마감되어 나오면 5월 인상은 사실상 불가, 6월부터 가능 (4 + 2 = 6)
   // 데이터 미입력 시에는 기존 timing 슬라이더 값 사용
-  const baseTimingMonth = 4 + timingLv;  // timingLv=1 → 5월 (legacy)
+  const baseTimingMonth = _getConfiguredStartMonth();  // 직접 입력값 우선, 없으면 기존 timing 축 기준
   const dataFloorMonth = (DATA.loaded && DATA.currentMonth > 0)
     ? DATA.currentMonth + 2
     : 0;  // 데이터 없으면 floor 없음
@@ -6343,9 +6427,35 @@ function renderAxes() {
     const cur = STATE.axes[key];
     const lv = ax.levels[cur];
     const isResist = key === 'resist';
+    const isTiming = key === 'timing';
     const max = ax.levels.length - 1;
     const pct = (cur / max) * 100;
     const tipHtml = ax.tip ? ` <span class="help-i" data-tip="${ax.tip.replace(/"/g, '&quot;')}">?</span>` : '';
+    const startMonth = _getConfiguredStartMonth();
+    if (isTiming) {
+      const dataFloor = (DATA.loaded && DATA.currentMonth > 0) ? DATA.currentMonth + 2 : 1;
+      const effectiveMonth = Math.min(12, Math.max(startMonth, dataFloor));
+      return `
+        <div class="slider-row">
+          <div class="head">
+            <div>
+              <div class="name">${ax.label}${tipHtml}</div>
+              <div class="desc">1차 조정월을 숫자로 입력합니다. ${DATA.loaded && DATA.currentMonth > 0 ? `현재 데이터 기준 최소 ${dataFloor}월 적용` : '1~12월 입력 가능'}</div>
+            </div>
+            <div class="lvl"><span class="lvl-num">${effectiveMonth}</span>월</div>
+          </div>
+          <div style="display:grid; grid-template-columns: 1fr auto; gap:10px; align-items:center; margin-top:10px;">
+            <div style="font-size:11.5px; color:var(--ink-2); line-height:1.5;">
+              입력 ${startMonth}월 → 실제 1차 적용 ${effectiveMonth}월
+            </div>
+            <input type="number" min="1" max="12" step="1" value="${startMonth}"
+              onchange="setStartMonth(this.value)"
+              onkeydown="if(event.key==='Enter') setStartMonth(this.value)"
+              style="width:74px; padding:6px 8px; border:1px solid var(--line-2); border-radius:4px; font-family:var(--font-mono); font-size:13px; text-align:right; background:var(--surface); color:var(--ink);">
+          </div>
+        </div>
+      `;
+    }
     return `
       <div class="slider-row" style="${isResist ? 'border-color: var(--gold); background: linear-gradient(180deg, #fcf9f0 0%, var(--surface-2) 100%);' : ''}">
         <div class="head">
@@ -6370,11 +6480,51 @@ function setAxis(key, val) {
   STATE.scenario = 'custom';
   // 슬라이더 직접 조작 시 시나리오 역산 조정폭 해제 — 사용자 수기값 우선
   if (key === 'amount') STATE.amountOverride = null;
-  // 슬라이더 조작 시 수기값 초기화 (새 권고값 따라가게)
-  STATE.catManualAmounts = null;
-  STATE.manualSchedule = null;
-  STATE.catSchedules = {};
+  // 최초 적용 시기는 금액 재산출 없이 회차 월만 바꾼다.
+  if (key === 'timing') {
+    STATE.startMonthOverride = _getConfiguredStartMonth();
+    const dataFloor = (DATA.loaded && DATA.currentMonth > 0) ? DATA.currentMonth + 2 : 1;
+    const startMonth = Math.min(12, Math.max(STATE.startMonthOverride, dataFloor));
+    if (STATE.manualSchedule) _applyStartMonthToScheduleRows(STATE.manualSchedule, startMonth);
+    Object.keys(STATE.catSchedules || {}).forEach(cat => _applyStartMonthToScheduleRows(STATE.catSchedules[cat], startMonth));
+  }
+  _saveCurrentPricingLevelAmounts();
+  const pricingSnap = _snapshotPricingState();
   renderAxes(); renderImpact(); renderWorkflow(); renderDecisionCharts(); renderBoardBanner();
+  _restorePricingState(pricingSnap);
+  _saveCurrentPricingLevelAmounts();
+  renderManualCatInputs();
+  renderRoundSchedulePolicy();
+  recalcManualOpEstimate();
+  _renderFinalCharts();
+  save();
+}
+
+function setStartMonth(val) {
+  const prev = _getConfiguredStartMonth();
+  let month = parseInt(val, 10);
+  if (!Number.isFinite(month)) month = prev;
+  month = Math.max(1, Math.min(12, month));
+  STATE.startMonthOverride = month;
+  STATE.scenario = 'custom';
+  const dataFloor = (DATA.loaded && DATA.currentMonth > 0) ? DATA.currentMonth + 2 : 1;
+  const startMonth = Math.min(12, Math.max(month, dataFloor));
+
+  // 금액은 보존하고 회차 월만 새 시작월 기준으로 재배치
+  if (STATE.manualSchedule) _applyStartMonthToScheduleRows(STATE.manualSchedule, startMonth);
+  Object.keys(STATE.catSchedules || {}).forEach(cat => _applyStartMonthToScheduleRows(STATE.catSchedules[cat], startMonth));
+  const preserved = _snapshotPricingState();
+
+  renderAxes();
+  renderImpact();
+  renderWorkflow();
+  renderBoardBanner();
+
+  _restorePricingState(preserved);
+  renderManualCatInputs();
+  renderRoundSchedulePolicy();
+  recalcManualOpEstimate();
+  _renderFinalCharts();
   save();
 }
 
@@ -6382,9 +6532,13 @@ function applyPreset(name) {
   if (!PRESETS[name]) return;
   STATE.axes = Object.assign({}, PRESETS[name].set);
   STATE.scenario = name;
+  STATE.startMonthOverride = null;
+  STATE.catManualAmountsByLevel = {};
   // v38: 1안 80% · 2안 90% · 3안 100% 목표 달성에 필요한 조정폭을 데이터에서 역산해 적용
   if (SCENARIO_ACH_TARGETS[name] != null) {
-    const solved = _solveAmountForAchievement(SCENARIO_ACH_TARGETS[name]);
+    const targetPct = SCENARIO_ACH_TARGETS[name];
+    STATE.pricingScenarioTarget = targetPct;
+    const solved = _solveAmountForAchievement(targetPct);
     STATE.amountOverride = solved.amt;
     // 역산 조정폭에 가장 근접한 슬라이더 레벨로 맞춰 표시(슬라이더 위치 자연스럽게)
     let bestIdx = 0, bestDiff = Infinity;
@@ -6396,8 +6550,13 @@ function applyPreset(name) {
     // v44: 축종별 차등 조정폭 설정 — 양계·축우처럼 적자 깊은 축종이 자기 목표%에 도달하도록
     //   전사 평균×BOM비율 대신, 각 축종이 (자기 목표 × 시나리오%)에 도달하는 조정폭을 개별 역산
     STATE.catNoIncrease = {};   // 제외 상태 초기화 먼저
-    STATE.catManualAmounts = _solveCatAmountsForAchievement(SCENARIO_ACH_TARGETS[name]);
+    const catSolved = _solvePricingAmountsForLevel('cat', targetPct);
+    const midSolved = _solvePricingAmountsForLevel('mid', targetPct);
+    _setCachedPricingLevelAmounts('cat', catSolved);
+    _setCachedPricingLevelAmounts('mid', midSolved);
+    STATE.catManualAmounts = _getCachedPricingLevelAmounts(_getPricingGroupLevel());
   } else {
+    STATE.pricingScenarioTarget = null;
     STATE.amountOverride = null;  // 인하·동결 등은 고정 레벨 사용
     STATE.catManualAmounts = null;
     STATE.catNoIncrease = {};
@@ -6405,6 +6564,7 @@ function applyPreset(name) {
   // 프리셋 적용 시 회차/스케줄 수기값만 초기화 (catManualAmounts는 위에서 설정됨)
   STATE.manualSchedule = null;
   STATE.catSchedules = {};
+  _saveCurrentPricingLevelAmounts();
   // v42: 프리셋 버튼 active 색상 토글 (선택된 것은 gold, 나머지는 일반)
   document.querySelectorAll('#presetButtonRow .btn[data-preset]').forEach(btn => {
     const isActive = btn.getAttribute('data-preset') === name;
@@ -8628,6 +8788,7 @@ function toggleCatPriceApply(cat, checked) {
     if (STATE.catSchedules && STATE.catSchedules[cat]) delete STATE.catSchedules[cat];
     writeAuditLog('조정 단위별 조정 미적용', `MODE 2 ${_getPricingGroupLabel(cat, true)} 조정 적용 OFF · ${_fmtSignedWon(prevAmt)}/kg → 0원/kg · MODE 3 회차 미생성`, 'AUTO SAVE', '사용자 조작');
   }
+  _saveCurrentPricingLevelAmounts();
   renderManualCatInputs();
   _syncFromMode2ToMode13();
   renderRoundSchedulePolicy();
@@ -8850,6 +9011,7 @@ function updateManualCatAmount(cat, val) {
   const prevAmt = STATE.catManualAmounts[cat] || 0;
   const cap = (_getParentCatFromGroupKey(cat) === '양어') ? PRICING_RULES.MAX_PER_ROUND_FISH_CAP : PRICING_RULES.MAX_PER_ROUND_CAP;
   STATE.catManualAmounts[cat] = Math.max(-cap, Math.min(cap, parseInt(val, 10) || 0));
+  _saveCurrentPricingLevelAmounts();
   if (prevAmt !== STATE.catManualAmounts[cat]) writeAuditLog('조정 단위별 손익 조정', `MODE 2 ${_getPricingGroupLabel(cat, true)} 최종 조정폭 ${_fmtSignedWon(prevAmt)} → ${_fmtSignedWon(STATE.catManualAmounts[cat])}/kg`, 'AUTO SAVE', '사용자 조작');
   recalcManualOpEstimate();
   // MODE 2 → MODE 1, 3 동기화
@@ -9027,7 +9189,6 @@ function renderRoundSchedulePolicy() {
   if (manualEl) {
     const schedule = _getScheduleForFinal(selectedCat);
     const editing = schedule.rows || [];
-    const amtCap = selectedCat === '전체' ? 100 : (_getParentCatFromGroupKey(selectedCat) === '양어' ? PRICING_RULES.MAX_PER_ROUND_FISH_CAP : PRICING_RULES.MAX_PER_ROUND_CAP);
     const monthHandler = selectedCat === '전체'
       ? (i) => `updateManualScheduleField(${i}, 'month', this.value)`
       : (i) => `updateCatScheduleField('${selectedCat}', ${i}, 'month', this.value)`;
@@ -9040,7 +9201,7 @@ function renderRoundSchedulePolicy() {
         <input type="number" min="1" max="12" step="1" value="${s.month}" data-idx="${i}" data-field="month"
           style="padding: 5px 8px; border: 1px solid var(--line-2); border-radius: 4px; font-family: var(--font-mono); font-size: 12px; text-align: right; background: var(--surface); color: var(--ink); width: 100%;"
           oninput="${monthHandler(i)}">
-        <input type="number" min="${-amtCap}" max="${amtCap}" step="0.5" value="${s.amt}" data-idx="${i}" data-field="amt"
+        <input type="number" step="0.5" value="${s.amt}" data-idx="${i}" data-field="amt"
           style="padding: 5px 8px; border: 1px solid var(--line-2); border-radius: 4px; font-family: var(--font-mono); font-size: 12px; text-align: right; background: var(--surface); color: var(--ink); width: 100%;"
           oninput="${amtHandler(i)}">
         ${editing.length > 1 ? `<button onclick="removeManualRound(${i})" data-tip="이 회차 삭제" style="background: transparent; border: 1px solid var(--line-2); color: var(--ink-3); border-radius: 4px; cursor: pointer; padding: 4px 6px; font-size: 11px;">×</button>` : '<span></span>'}
@@ -9115,7 +9276,7 @@ function updateCatScheduleField(cat, idx, field, value) {
   const nextValRaw = parseFloat(value);
   let nextVal = isFinite(nextValRaw) ? nextValRaw : 0;
   if (field === 'month') nextVal = Math.max(1, Math.min(12, parseInt(nextVal, 10) || 1));
-  if (field === 'amt') { const cap = (_getParentCatFromGroupKey(cat) === '양어') ? PRICING_RULES.MAX_PER_ROUND_FISH_CAP : PRICING_RULES.MAX_PER_ROUND_CAP; nextVal = Math.max(-cap, Math.min(cap, Math.round(nextVal * 10) / 10)); }
+  if (field === 'amt') nextVal = Math.round(nextVal * 10) / 10;
   rows[idx][field] = nextVal;
   rows.forEach((s, i) => s.round = i + 1);
   STATE.catSchedules[cat] = rows;
@@ -9172,7 +9333,7 @@ function updateManualScheduleField(idx, field, value) {
   }
   if (!STATE.manualSchedule[idx]) return;
   const prevVal = STATE.manualSchedule[idx][field] || 0;
-  STATE.manualSchedule[idx][field] = field === 'amt' ? Math.max(-100, Math.min(100, parseFloat(value) || 0)) : (parseFloat(value) || 0);
+  STATE.manualSchedule[idx][field] = field === 'amt' ? Math.round((parseFloat(value) || 0) * 10) / 10 : (parseFloat(value) || 0);
   if (prevVal !== STATE.manualSchedule[idx][field]) writeAuditLog('회차 정책 조정', `MODE 3 ${idx + 1}차 ${field === 'month' ? '월' : '금액'} ${prevVal}${field === 'month' ? '월' : '원/kg'} → ${STATE.manualSchedule[idx][field]}${field === 'month' ? '월' : '원/kg'}`, 'AUTO SAVE', '사용자 조작');
   // MODE 3 → MODE 1, 2 업스트림 동기화 (금액 변경만 — 월 변경은 영향 없음)
   if (field === 'amt') {
@@ -9229,7 +9390,10 @@ function removeManualRound(idx) {
     const rows = _ensureCatScheduleRows(selectedCat);
     if (!rows || rows.length <= 1) return;
     const removedRound = rows[idx];
+    const removedAmt = Number(removedRound?.amt) || 0;
     rows.splice(idx, 1);
+    const mergeIdx = Math.max(0, Math.min(idx - 1, rows.length - 1));
+    rows[mergeIdx].amt = Math.round(((Number(rows[mergeIdx].amt) || 0) + removedAmt) * 10) / 10;
     rows.forEach((s, i) => s.round = i + 1);
     STATE.catSchedules[selectedCat] = rows;
     const totalAmt = Math.round(rows.reduce((s, x) => s + (Number(x.amt) || 0), 0) * 10) / 10;
@@ -9238,7 +9402,7 @@ function removeManualRound(idx) {
       STATE.catManualAmounts = _getCatRecommendedAmounts(r.amt);
     }
     STATE.catManualAmounts[selectedCat] = totalAmt;
-    writeAuditLog('단위별 회차 정책 조정', `MODE 3 ${_getPricingGroupLabel(selectedCat, true)} ${idx + 1}차 삭제 · ${removedRound?.month || '—'}월 ${_fmtSignedWon(removedRound?.amt || 0)}/kg`, 'AUTO SAVE', '사용자 조작');
+    writeAuditLog('단위별 회차 정책 조정', `MODE 3 ${_getPricingGroupLabel(selectedCat, true)} ${idx + 1}차 삭제 · ${removedRound?.month || '—'}월 ${_fmtSignedWon(removedAmt)}/kg → ${mergeIdx + 1}차에 합산`, 'AUTO SAVE', '사용자 조작');
     renderManualCatInputs();
     _updateMode1Display();
     recalcManualOpEstimate();
@@ -9250,8 +9414,11 @@ function removeManualRound(idx) {
   }
   if (!STATE.manualSchedule || STATE.manualSchedule.length <= 1) return;
   const removedRound = STATE.manualSchedule[idx];
+  const removedAmt = Number(removedRound?.amt) || 0;
   STATE.manualSchedule.splice(idx, 1);
-  writeAuditLog('회차 정책 조정', `MODE 3 ${idx + 1}차 삭제 · ${removedRound?.month || '—'}월 ${_fmtSignedWon(removedRound?.amt || 0)}/kg`, 'AUTO SAVE', '사용자 조작');
+  const mergeIdx = Math.max(0, Math.min(idx - 1, STATE.manualSchedule.length - 1));
+  STATE.manualSchedule[mergeIdx].amt = Math.round(((Number(STATE.manualSchedule[mergeIdx].amt) || 0) + removedAmt) * 10) / 10;
+  writeAuditLog('회차 정책 조정', `MODE 3 ${idx + 1}차 삭제 · ${removedRound?.month || '—'}월 ${_fmtSignedWon(removedAmt)}/kg → ${mergeIdx + 1}차에 합산`, 'AUTO SAVE', '사용자 조작');
   // 라운드 번호 재정렬
   STATE.manualSchedule.forEach((s, i) => s.round = i + 1);
   // 회차 삭제 시 MODE 3 → MODE 1, 2 동기화
@@ -9480,23 +9647,57 @@ function _getPricingGroupLevel() {
 function _getPricingGroups() {
   const level = _getPricingGroupLevel();
   if (level === 'mid' && DATA.loaded && DATA.agg?.outlook?.byMid) {
-    const groups = Object.keys(DATA.agg.outlook.byMid).map(key => {
+    const groups = [];
+    const fishSmallOrder = ['메기/향어', '송어', '우렁이', '광어', '강도다리', '광어(분말)', '우럭/돔', '아쿠아닉스', '틸라피아', '미꾸라지', '새우'];
+    Object.keys(DATA.agg.outlook.byMid).forEach(key => {
       const row = DATA.agg.outlook.byMid[key];
+      if (row?.cat1 === '양어') return;
       const qty = row?.metrics?.qty?.total || 0;
-      return {
+      groups.push({
         key,
         cat: row.cat1,
         mid: row.cat2 || '_',
+        small: '',
         label: row.cat2 && row.cat2 !== '_' ? row.cat2 : row.cat1,
         subLabel: row.cat1,
         qty
-      };
-    }).filter(g => g.cat);
+      });
+    });
+    Object.keys(DATA.agg.outlook.bySmall || {}).forEach(key => {
+      const row = DATA.agg.outlook.bySmall[key];
+      if (row?.cat1 !== '양어') return;
+      if (!row.cat3 || row.cat3 === '_') return;
+      const qty = row?.metrics?.qty?.total || 0;
+      const groupKey = `${row.cat1}|${row.cat3}`;
+      const existing = groups.find(g => g.key === groupKey);
+      if (existing) {
+        existing.qty += qty;
+        if (row.cat2 && row.cat2 !== '_' && !existing.midList.includes(row.cat2)) existing.midList.push(row.cat2);
+        existing.subLabel = existing.midList.length ? `${row.cat1} · ${existing.midList.join('/')}` : row.cat1;
+      } else {
+        groups.push({
+          key: groupKey,
+          cat: row.cat1,
+          mid: row.cat2 || '_',
+          midList: row.cat2 && row.cat2 !== '_' ? [row.cat2] : [],
+          small: row.cat3 || '_',
+          label: row.cat3,
+          subLabel: row.cat2 && row.cat2 !== '_' ? `${row.cat1} · ${row.cat2}` : row.cat1,
+          qty
+        });
+      }
+    });
     const catOrder = _getDpdsCats();
     groups.sort((a, b) => {
       const ai = catOrder.includes(a.cat) ? catOrder.indexOf(a.cat) : 999;
       const bi = catOrder.includes(b.cat) ? catOrder.indexOf(b.cat) : 999;
       if (ai !== bi) return ai - bi;
+      if (a.cat === '양어' && b.cat === '양어') {
+        const ao = fishSmallOrder.includes(a.label) ? fishSmallOrder.indexOf(a.label) : 999;
+        const bo = fishSmallOrder.includes(b.label) ? fishSmallOrder.indexOf(b.label) : 999;
+        if (ao !== bo) return ao - bo;
+        if (a.subLabel !== b.subLabel) return a.subLabel.localeCompare(b.subLabel, 'ko');
+      }
       return a.label.localeCompare(b.label, 'ko');
     });
     if (groups.length) return groups;
@@ -9532,9 +9733,10 @@ function _getPricingGroupLabel(key, includeCat = false) {
 }
 
 function _getPricingGroupKeyForSku(sku) {
-  return _getPricingGroupLevel() === 'mid'
-    ? `${sku.cat1}|${sku.cat2 || '_'}`
-    : sku.cat1;
+  if (_getPricingGroupLevel() !== 'mid') return sku.cat1;
+  return sku.cat1 === '양어'
+    ? `${sku.cat1}|${sku.cat3 || '_'}`
+    : `${sku.cat1}|${sku.cat2 || '_'}`;
 }
 
 function _renderPricingGroupLevelSwitch() {
@@ -9554,9 +9756,34 @@ function _renderPricingGroupLevelSwitch() {
 function setPricingGroupLevel(level) {
   const next = level === 'mid' ? 'mid' : 'cat';
   if (STATE.pricingGroupLevel === next) return;
+  _saveCurrentPricingLevelAmounts();
+  const prevAmounts = _clonePlain(STATE.catManualAmounts);
+  const prevAvg = prevAmounts ? _avgFromCatAmounts(prevAmounts) : null;
   STATE.pricingGroupLevel = next;
-  STATE.catManualAmounts = null;
-  STATE.catNoIncrease = {};
+
+  const cached = _getCachedPricingLevelAmounts(next);
+  if (cached) {
+    STATE.catManualAmounts = cached;
+  } else if (SCENARIO_ACH_TARGETS[STATE.scenario] != null) {
+    STATE.catManualAmounts = _solveCatAmountsForAchievement(SCENARIO_ACH_TARGETS[STATE.scenario]);
+  } else if (STATE.pricingScenarioTarget != null) {
+    STATE.catManualAmounts = _solveCatAmountsForAchievement(STATE.pricingScenarioTarget);
+  } else if (prevAmounts && Number.isFinite(prevAvg)) {
+    STATE.catManualAmounts = _getCatRecommendedAmounts(prevAvg);
+  } else {
+    STATE.catManualAmounts = null;
+  }
+  _setCachedPricingLevelAmounts(next, STATE.catManualAmounts);
+
+  const nextNoIncrease = {};
+  Object.keys(STATE.catNoIncrease || {}).forEach(key => {
+    const parent = _getParentCatFromGroupKey(key);
+    _getPricingGroups().forEach(g => {
+      if (g.key === key || g.cat === parent) nextNoIncrease[g.key] = true;
+    });
+  });
+  STATE.catNoIncrease = nextNoIncrease;
+  _applyCatExclusionsToState();
   STATE.catSchedules = {};
   STATE.finalMonthlyCat = '전체';
   STATE.mode3ScheduleCat = '전체';
@@ -9626,16 +9853,39 @@ function _getOpDataBundle(cat) {
       qtyNonLinked = DATA.aggNonLinked?.outlook?.byMetric?.qty?.total || qty;
     } else if (String(cat).includes('|')) {
       const parentCat = _getParentCatFromGroupKey(cat);
-      const pMid = DATA.agg.plan?.byMid?.[cat]?.metrics;
-      const oMid = DATA.agg.outlook?.byMid?.[cat]?.metrics;
-      const p = pMid?.op;
-      const o = oMid?.op;
+      const groupInfo = _getPricingGroupByKey(cat);
+      const isFishSmallGroup = groupInfo?.cat === '양어' && !!groupInfo.small;
+      const isSmallKey = String(cat).split('|').length >= 3;
+      const mergeSmallMetrics = (bucket, metricKey) => {
+        const out = { months: Array(12).fill(0), total: 0 };
+        Object.keys(bucket || {}).forEach(k => {
+          const row = bucket[k];
+          if (row?.cat1 !== '양어' || row?.cat3 !== groupInfo.small) return;
+          const m = row.metrics?.[metricKey];
+          if (!m) return;
+          for (let i = 0; i < 12; i++) out.months[i] += m.months?.[i] || 0;
+          out.total += m.total || 0;
+        });
+        return out.total || out.months.some(v => Math.abs(v) > 0.0001) ? out : null;
+      };
+      const pGroup = isFishSmallGroup
+        ? { op: mergeSmallMetrics(DATA.agg.plan?.bySmall, 'op'), qty: mergeSmallMetrics(DATA.agg.plan?.bySmall, 'qty') }
+        : (isSmallKey ? DATA.agg.plan?.bySmall?.[cat]?.metrics : DATA.agg.plan?.byMid?.[cat]?.metrics);
+      const oGroup = isFishSmallGroup
+        ? { op: mergeSmallMetrics(DATA.agg.outlook?.bySmall, 'op'), qty: mergeSmallMetrics(DATA.agg.outlook?.bySmall, 'qty') }
+        : (isSmallKey ? DATA.agg.outlook?.bySmall?.[cat]?.metrics : DATA.agg.outlook?.byMid?.[cat]?.metrics);
+      const p = pGroup?.op;
+      const o = oGroup?.op;
       if (p?.months) planMonthly = p.months.map(v => v / 1e8);
       if (o?.months) outlookMonthly = o.months.map(v => v / 1e8);
       planTotalOku = (p?.total || 0) / 1e8;
       outlookTotalOku = (o?.total || 0) / 1e8;
-      qty = oMid?.qty?.total || 0;
-      qtyNonLinked = DATA.aggNonLinked?.outlook?.byMid?.[cat]?.metrics?.qty?.total || qty;
+      qty = oGroup?.qty?.total || 0;
+      qtyNonLinked = (isFishSmallGroup
+        ? mergeSmallMetrics(DATA.aggNonLinked?.outlook?.bySmall, 'qty')?.total
+        : isSmallKey
+        ? DATA.aggNonLinked?.outlook?.bySmall?.[cat]?.metrics?.qty?.total
+        : DATA.aggNonLinked?.outlook?.byMid?.[cat]?.metrics?.qty?.total) || qty;
       if (!p && !o) {
         const w = DPDS_DEFAULT_CAT_WEIGHT[parentCat] || 0.25;
         planMonthly = DPDS_DEFAULT_MONTHLY_PLAN.map(v => v * w);
@@ -9703,14 +9953,11 @@ function _getMode3StartMonth(r) {
 }
 
 function _normalizeScheduleRows(rows, cat, keepZeroRows = false) {
-  // 축종별 회차당 상한: 양어 500, 일반 100 (clamp 한도도 축종에 맞춰 적용)
-  const parentCat = _getParentCatFromGroupKey(cat);
-  const cap = (parentCat === '양어') ? PRICING_RULES.MAX_PER_ROUND_FISH_CAP : PRICING_RULES.MAX_PER_ROUND_CAP;
   return (Array.isArray(rows) ? rows : [])
     .map((s, i) => ({
       round: i + 1,
       month: Math.max(1, Math.min(12, parseInt(s.month, 10) || 1)),
-      amt: Math.max(-cap, Math.min(cap, Math.round((parseFloat(s.amt) || 0) * 10) / 10))
+      amt: Math.round((parseFloat(s.amt) || 0) * 10) / 10
     }))
     .filter(s => keepZeroRows || Math.abs(s.amt) > 0.0001);
 }
