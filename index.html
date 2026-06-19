@@ -3893,9 +3893,10 @@ body[data-width="full"]     { --content-max: none; }
           </div>
 
           <!-- 중: Mode 2 — 축종별 수기 입력 -->
-          <div data-tip="MODE 2: 축종별로 조정폭을 차등 조정합니다. ▸ 권고값은 BOM(배합비) 차이 반영: 양돈 1.28배 · 양어 1.10배 · 양계 1.0배 · 축우 0.55배. ▸ 값 변경 시 가중평균이 MODE 1로, 총합이 MODE 3 회차로 자동 반영." style="background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 14px; min-width: 0; overflow: hidden;">
-            <div style="font-family: var(--font-mono); font-size: 10px; color: var(--gold); letter-spacing: .12em; margin-bottom: 8px;">MODE 2 · 축종별 수기</div>
+          <div data-tip="MODE 2: 대분류 또는 중분류 단위로 조정폭을 차등 조정합니다. ▸ 권고값은 부모 축종 BOM 비율을 반영하고, 중분류 선택 시 판매량 가중평균은 중분류 판매량 기준으로 계산합니다. ▸ 값 변경 시 가중평균이 MODE 1로, 총합이 MODE 3 회차로 자동 반영." style="background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 14px; min-width: 0; overflow: hidden;">
+            <div style="font-family: var(--font-mono); font-size: 10px; color: var(--gold); letter-spacing: .12em; margin-bottom: 8px;">MODE 2 · 조정 단위 선택</div>
             <h4 style="font-family: var(--font-display); font-size: 13px; font-weight: 600; margin: 0 0 10px;">조정폭 (경영진 최종안)</h4>
+            <div id="pricingGroupLevelSwitch" style="display:flex; gap:4px; margin-bottom:8px;"></div>
             <div id="catManualInputs" style="display: flex; flex-direction: column; gap: 5px; margin-bottom: 10px;">
               <!-- JS로 렌더링 -->
             </div>
@@ -5241,6 +5242,7 @@ function splitAmountByRule(totalAmt, maxPerRound = _getMaxPerRound()) {
 /* === 회차당 최대 조정폭 (v36) — 축종별 분리: 양어 전용(0~500) + 일반 축종(0~100, 기본 40) ===
    cat 인자: '양어'면 양어 전용값, 그 외 축종이거나 미지정이면 일반 축종 공통값 반환 === */
 function _getMaxPerRound(cat) {
+  cat = (typeof _getParentCatFromGroupKey === 'function') ? _getParentCatFromGroupKey(cat) : cat;
   if (cat === '양어') {
     if (typeof STATE !== 'undefined' && typeof STATE.maxPerRoundFish === 'number' && STATE.maxPerRoundFish > 0) {
       return STATE.maxPerRoundFish;
@@ -5395,8 +5397,9 @@ let STATE = {
   decisions: [],
   decisionStatus: 'pending',
   realdata: false,
-  catManualAmounts: null,        // 수기 입력 축종별 조정폭
-  catNoIncrease: {},             // MODE 2 축종별 조정 미적용 여부 {양계:true, ...}
+  catManualAmounts: null,        // 수기 입력 조정폭 (대분류 또는 대분류|중분류)
+  catNoIncrease: {},             // MODE 2 조정 미적용 여부 {양계:true, 양계|산란계:true, ...}
+  pricingGroupLevel: 'cat',      // MODE 2 조정 단위: cat=대분류, mid=중분류
   churnHistoryOption: { enabled: false, rows: [], uploadedAt: null }, // 거래처 이탈 고도화 옵션
   manualSchedule: null,          // 전체 탭 전용 수기 입력 회차 일정 [{round:1, month:5, amt:20}, {round:2, month:7, amt:10}]
   catSchedules: {},              // 축종별 MODE 3 직접 조정 일정 {양돈:[{round,month,amt}], ...}
@@ -5448,6 +5451,7 @@ function restore() {
   }
   if (!STATE.catSchedules || typeof STATE.catSchedules !== 'object' || Array.isArray(STATE.catSchedules)) STATE.catSchedules = {};
   if (!STATE.catNoIncrease || typeof STATE.catNoIncrease !== 'object' || Array.isArray(STATE.catNoIncrease)) STATE.catNoIncrease = {};
+  if (STATE.pricingGroupLevel !== 'mid') STATE.pricingGroupLevel = 'cat';
   if (!STATE.churnHistoryOption || typeof STATE.churnHistoryOption !== 'object') STATE.churnHistoryOption = { enabled: false, rows: [], uploadedAt: null };
   if (!Array.isArray(STATE.churnHistoryOption.rows)) STATE.churnHistoryOption.rows = [];
   // v32: 비연동 제품 필터 (true 시 연동제="Y"/"O"/"연동" 행 제외, 비연동 제품에만 인상·인하 적용)
@@ -5768,10 +5772,12 @@ function _solveAmountForAchievement(targetAchPct) {
    - cat별 필요 조정폭 = (목표OP × pct% − 전망OP) × 1e8 ÷ (비연동물량 × 환원율)
    - 회차당 상한(일반 100·양어 500원/kg) 클램프
    - 전망이 이미 목표% 이상이면 0 (인상 불필요)
-   반환: { 양계: n, 양돈: n, 축우: n, 양어: n } */
+   반환: 현재 MODE 2 조정 단위별 금액 { 양계: n } 또는 { 양계|산란계: n } */
 function _solveCatAmountsForAchievement(targetAchPct) {
   const recovery = _getRecoveryRate();
-  const cats = (typeof _getDpdsCats === 'function') ? _getDpdsCats() : ['양계','양돈','축우','양어'];
+  const groups = (typeof _getPricingGroups === 'function')
+    ? _getPricingGroups()
+    : ((typeof _getDpdsCats === 'function') ? _getDpdsCats() : ['양계','양돈','축우','양어']).map(cat => ({ key: cat, cat }));
   // v44: 회차 적용 시점에 따른 '연중 유효 비율' 산출
   //   인상이 7월부터 적용되면 연간 효과의 일부(7~12월분)만 OP에 반영되므로,
   //   목표 달성에 필요한 조정폭을 그 비율의 역수만큼 키워야 한다.
@@ -5797,9 +5803,11 @@ function _solveCatAmountsForAchievement(targetAchPct) {
   if (!(effRatio > 0.05)) effRatio = 1;  // 안전장치 (너무 작으면 1로)
 
   const result = {};
-  cats.forEach(cat => {
-    const b = (typeof _getOpDataBundle === 'function') ? _getOpDataBundle(cat) : null;
-    if (!b) { result[cat] = 0; return; }
+  groups.forEach(group => {
+    const key = group.key || group.cat;
+    const parentCat = group.cat || _getParentCatFromGroupKey(key);
+    const b = (typeof _getOpDataBundle === 'function') ? _getOpDataBundle(key) : null;
+    if (!b) { result[key] = 0; return; }
     const planOku = b.planTotalOku || 0;
     const outlookOku = b.outlookTotalOku || 0;
     const qNL = b.qtyNonLinked || b.qty || 0;
@@ -5809,9 +5817,9 @@ function _solveCatAmountsForAchievement(targetAchPct) {
     // 연간 풀 효과 기준 필요 조정폭을 유효비율로 나눠 '실제 회차 적용' 보정
     let amt = (qNL > 0 && recovery > 0) ? (needAddOku * 1e8) / (qNL * recovery * effRatio) : 0;
     // 회차당 최대 조정폭 상한으로 클램프 (양어 500, 그 외 100)
-    const cap = (cat === '양어') ? 500 : 100;
+    const cap = (parentCat === '양어') ? 500 : 100;
     amt = Math.min(amt, cap);
-    result[cat] = Math.round(amt);
+    result[key] = Math.round(amt);
   });
   return result;
 }
@@ -8508,14 +8516,15 @@ function renderDecisionCharts() {
     destroyChart('chartCats');
     const recommended = _getCatRecommendedAmounts(r.amt);
     const finalAmounts = _getFinalCatAmounts(r);
+    const groups = _getPricingGroups();
 
     charts['chartCats'] = new Chart(el2, {
       type: 'bar',
       data: {
-        labels: CATS,
+        labels: groups.map(g => _getPricingGroupLevel() === 'mid' ? `${g.cat} · ${g.label}` : g.label),
         datasets: [
-          { label: '권고 (2안)', data: CATS.map(c => recommended[c] || 0), backgroundColor: '#cbd5e1', borderRadius: 4, borderWidth: 1, borderColor: '#94a3b8' },
-          { label: '경영진 최종안', data: CATS.map(c => finalAmounts[c] || 0), backgroundColor: '#8B1538', borderRadius: 4 }
+          { label: '권고 (2안)', data: groups.map(g => recommended[g.key] || 0), backgroundColor: '#cbd5e1', borderRadius: 4, borderWidth: 1, borderColor: '#94a3b8' },
+          { label: '경영진 최종안', data: groups.map(g => finalAmounts[g.key] || 0), backgroundColor: '#8B1538', borderRadius: 4 }
         ]
       },
       options: {
@@ -8538,8 +8547,9 @@ function renderDecisionCharts() {
 
     const sub = document.getElementById('chartCatsSub');
     if (sub) {
-      const diff = CATS.reduce((s, c) => s + Math.abs((finalAmounts[c] || 0) - (recommended[c] || 0)), 0);
-      sub.textContent = diff > 0 ? `경영진 조정 적용 (총 차이 ${diff}원${CATS.filter(c=>!_isCatPriceActive(c)).length ? ' · 미적용 ' + CATS.filter(c=>!_isCatPriceActive(c)).join('/') : ''})` : (CATS.filter(c=>!_isCatPriceActive(c)).length ? `권고 동일 · 미적용 ${CATS.filter(c=>!_isCatPriceActive(c)).join('/')}` : '권고와 동일 (수기 조정 없음)');
+      const diff = groups.reduce((s, g) => s + Math.abs((finalAmounts[g.key] || 0) - (recommended[g.key] || 0)), 0);
+      const excluded = groups.filter(g=>!_isCatPriceActive(g.key)).map(g => _getPricingGroupLabel(g.key, _getPricingGroupLevel() === 'mid'));
+      sub.textContent = diff > 0 ? `경영진 조정 적용 (총 차이 ${diff}원${excluded.length ? ' · 미적용 ' + excluded.join('/') : ''})` : (excluded.length ? `권고 동일 · 미적용 ${excluded.join('/')}` : '권고와 동일 (수기 조정 없음)');
     }
     renderManualCatInputs();
     renderRoundSchedulePolicy();  // 회차 정책 카드 갱신
@@ -8554,8 +8564,8 @@ function _getCatRecommendedAmounts(avgAmt) {
   // 축종별 차등: 양돈 가장 높음 (BOM 옥수수 비중 높음), 양어 보통, 양계 보통, 축우 낮음
   const ratios = { '양돈': 1.28, '양계': 1.0, '축우': 0.55, '양어': 1.10 };
   const result = {};
-  CATS.forEach(c => {
-    result[c] = Math.round(avgAmt * (ratios[c] || 1.0));
+  _getPricingGroups().forEach(g => {
+    result[g.key] = Math.round(avgAmt * (ratios[g.cat] || 1.0));
   });
   return result;
 }
@@ -8572,8 +8582,8 @@ function _isCatPriceActive(cat) {
 function _applyCatExclusions(amounts) {
   _ensureCatNoIncreaseState();
   const out = Object.assign({}, amounts || {});
-  _getDpdsCats().forEach(cat => {
-    if (!_isCatPriceActive(cat)) out[cat] = 0;
+  _getPricingGroups().forEach(g => {
+    if (!_isCatPriceActive(g.key)) out[g.key] = 0;
   });
   return out;
 }
@@ -8585,8 +8595,8 @@ function _getFinalCatAmounts(r) {
 
 function _applyCatExclusionsToState() {
   if (!STATE.catManualAmounts) return;
-  _getDpdsCats().forEach(cat => {
-    if (!_isCatPriceActive(cat)) STATE.catManualAmounts[cat] = 0;
+  _getPricingGroups().forEach(g => {
+    if (!_isCatPriceActive(g.key)) STATE.catManualAmounts[g.key] = 0;
   });
 }
 
@@ -8599,12 +8609,12 @@ function toggleCatPriceApply(cat, checked) {
   if (active) {
     delete STATE.catNoIncrease[cat];
     if (!STATE.catManualAmounts[cat]) STATE.catManualAmounts[cat] = _getCatRecommendedAmounts(r.amt)[cat] || 0;
-    writeAuditLog('축종별 조정 적용', `MODE 2 ${cat} 조정 적용 ON · 최종 조정폭 ${_fmtSignedWon(STATE.catManualAmounts[cat])}/kg`, 'AUTO SAVE', '사용자 조작');
+    writeAuditLog('조정 단위별 조정 적용', `MODE 2 ${_getPricingGroupLabel(cat, true)} 조정 적용 ON · 최종 조정폭 ${_fmtSignedWon(STATE.catManualAmounts[cat])}/kg`, 'AUTO SAVE', '사용자 조작');
   } else {
     STATE.catNoIncrease[cat] = true;
     STATE.catManualAmounts[cat] = 0;
     if (STATE.catSchedules && STATE.catSchedules[cat]) delete STATE.catSchedules[cat];
-    writeAuditLog('축종별 조정 미적용', `MODE 2 ${cat} 조정 적용 OFF · ${_fmtSignedWon(prevAmt)}/kg → 0원/kg · MODE 3 회차 미생성`, 'AUTO SAVE', '사용자 조작');
+    writeAuditLog('조정 단위별 조정 미적용', `MODE 2 ${_getPricingGroupLabel(cat, true)} 조정 적용 OFF · ${_fmtSignedWon(prevAmt)}/kg → 0원/kg · MODE 3 회차 미생성`, 'AUTO SAVE', '사용자 조작');
   }
   renderManualCatInputs();
   _syncFromMode2ToMode13();
@@ -8620,17 +8630,14 @@ function _getCatVolumeWeights() {
   // 데이터 있으면 실제 판매량, 없으면 기본 가중치
   const weights = {};
   let total = 0;
-  CATS.forEach(c => {
-    let q = 0;
-    if (DATA.loaded && DATA.agg && DATA.agg.outlook.byCategory[c]?.qty) {
-      q = DATA.agg.outlook.byCategory[c].qty.total;
-    } else {
-      q = DPDS_DEFAULT_CAT_QTY[c] || 0;
-    }
-    weights[c] = q;
+  _getPricingGroups().forEach(g => {
+    let q = Number(g.qty || 0);
+    if (!q && DATA.loaded && DATA.agg && DATA.agg.outlook.byCategory[g.cat]?.qty) q = DATA.agg.outlook.byCategory[g.cat].qty.total;
+    if (!q) q = DPDS_DEFAULT_CAT_QTY[g.cat] || 0;
+    weights[g.key] = q;
     total += q;
   });
-  if (total > 0) CATS.forEach(c => { weights[c] = weights[c] / total; });
+  if (total > 0) _getPricingGroups().forEach(g => { weights[g.key] = weights[g.key] / total; });
   return weights;
 }
 
@@ -8638,7 +8645,7 @@ function _avgFromCatAmounts(catAmounts) {
   if (!catAmounts) return 0;
   const w = _getCatVolumeWeights();
   let avg = 0;
-  CATS.forEach(c => { avg += (catAmounts[c] || 0) * (w[c] || 0); });
+  _getPricingGroups().forEach(g => { avg += (catAmounts[g.key] || 0) * (w[g.key] || 0); });
   return avg;
 }
 
@@ -8767,8 +8774,8 @@ function _syncFromMode3ToMode12() {
     const prevAvg = _avgFromCatAmounts(STATE.catManualAmounts);
     if (Math.abs(prevAvg) > 0.0001 && Math.abs(totalAmt) > 0.0001) {
       const scale = totalAmt / prevAvg;
-      CATS.forEach(c => {
-        STATE.catManualAmounts[c] = Math.round((STATE.catManualAmounts[c] || 0) * scale);
+      _getPricingGroups().forEach(g => {
+        STATE.catManualAmounts[g.key] = Math.round((STATE.catManualAmounts[g.key] || 0) * scale);
       });
     } else {
       STATE.catManualAmounts = _getCatRecommendedAmounts(totalAmt);
@@ -8788,22 +8795,30 @@ function _syncFromMode3ToMode12() {
 function renderManualCatInputs() {
   const wrap = document.getElementById('catManualInputs');
   if (!wrap) return;
+  _renderPricingGroupLevelSwitch();
   const r = compute();
   const recommended = _getCatRecommendedAmounts(r.amt);
   const rawDisplay = STATE.catManualAmounts || recommended;
   const display = _applyCatExclusions(rawDisplay);
-  wrap.innerHTML = CATS.map(c => {
+  const groups = _getPricingGroups();
+  wrap.innerHTML = groups.map(g => {
+    const c = g.key;
     const active = _isCatPriceActive(c);
+    const nameCell = _getPricingGroupLevel() === 'mid'
+      ? `<span style="font-size: 12px; font-weight: 700; color: var(--ink); white-space: nowrap; overflow:hidden; text-overflow:ellipsis; min-width: 0;" title="${g.subLabel} · ${g.label}">${g.label}</span><span style="font-size:9px; color:var(--ink-3); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${g.subLabel} · 권고 ${_fmtSignedWon(recommended[c])}</span>`
+      : `<span style="font-size: 12.5px; font-weight: 600; color: var(--ink); white-space: nowrap; min-width: 0;">${g.label}</span><span style="font-size:9px; color:var(--ink-3); white-space:nowrap;">권고 ${_fmtSignedWon(recommended[c])}</span>`;
+    const cap = g.cat === '양어' ? PRICING_RULES.MAX_PER_ROUND_FISH_CAP : PRICING_RULES.MAX_PER_ROUND_CAP;
     return `
-    <div style="display: grid; grid-template-columns: 40px 56px minmax(60px, 1fr) 56px; gap: 5px; align-items: center; padding: 4px 0; max-width: 100%; box-sizing: border-box; ${active ? '' : 'opacity:.72;'}">
-      <span style="font-size: 12.5px; font-weight: 600; color: var(--ink); white-space: nowrap; min-width: 0;">${c}</span>
-      <label style="display:flex; align-items:center; gap:3px; font-size:10.5px; color:${active ? 'var(--success)' : 'var(--danger)'}; cursor:pointer; white-space: nowrap; min-width: 0;" data-tip="체크 해제 시 해당 축종은 가격 조정 미적용. MODE 3 회차·실행관리 SKU 결과에도 +0원으로 반영됩니다.">
+    <div style="display: grid; grid-template-columns: minmax(76px, 1fr) 56px 74px; gap: 6px; align-items: center; padding: 4px 0; max-width: 100%; box-sizing: border-box; ${active ? '' : 'opacity:.72;'}">
+      <span style="display:flex; flex-direction:column; min-width:0;">${nameCell}</span>
+      <label style="display:flex; align-items:center; gap:3px; font-size:10.5px; color:${active ? 'var(--success)' : 'var(--danger)'}; cursor:pointer; white-space: nowrap; min-width: 0;" data-tip="체크 해제 시 해당 조정 단위는 가격 조정 미적용. MODE 3 회차·실행관리 SKU 결과에도 +0원으로 반영됩니다.">
         <input type="checkbox" ${active ? 'checked' : ''} onchange="toggleCatPriceApply('${c}', this.checked)" style="margin: 0;">
         <span>${active ? '적용' : '미적용'}</span>
       </label>
-      <span style="font-size: 10.5px; color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;" data-tip="권고 ${_fmtSignedWon(recommended[c])}/kg${active ? '' : ' · 현재 미적용으로 0원 처리'}">권고 ${_fmtSignedWon(recommended[c])}</span>
-      <input type="number" data-cat="${c}" value="${display[c] || 0}" step="1" min="-100" max="100" ${active ? '' : 'disabled'}
-        style="padding: 4px 5px; border: 1px solid var(--line-2); border-radius: 4px; font-family: var(--font-mono); font-size: 12px; text-align: right; background: ${active ? 'var(--surface)' : 'var(--surface-2)'}; color: ${active ? 'var(--ink)' : 'var(--ink-3)'}; width: 100%; min-width: 0; max-width: 100%; box-sizing: border-box;"
+      <input type="number" data-cat="${c}" value="${display[c] || 0}" step="1" min="${-cap}" max="${cap}" ${active ? '' : 'disabled'}
+        title="최종 조정폭 직접 입력 (원/kg)"
+        data-tip="최종 조정폭을 직접 입력합니다. 입력 즉시 MODE 1 평균, MODE 3 회차, 최종 차트에 반영됩니다."
+        style="padding: 5px 7px; border: 1px solid var(--line-2); border-radius: 4px; font-family: var(--font-mono); font-size: 12.5px; text-align: right; background: ${active ? 'var(--surface)' : 'var(--surface-2)'}; color: ${active ? 'var(--ink)' : 'var(--ink-3)'}; width: 100%; min-width: 0; max-width: 100%; box-sizing: border-box;"
         oninput="updateManualCatAmount('${c}', this.value)">
     </div>`;
   }).join('');
@@ -8812,7 +8827,7 @@ function renderManualCatInputs() {
 
 function updateManualCatAmount(cat, val) {
   if (!_isCatPriceActive(cat)) {
-    showToast(`${cat}은(는) 조정 미적용 상태입니다. 적용 체크 후 조정하세요.`, 'warn');
+    showToast(`${_getPricingGroupLabel(cat, true)}은(는) 조정 미적용 상태입니다. 적용 체크 후 조정하세요.`, 'warn');
     return;
   }
   // 편집 시에만 STATE 저장 (이때 처음 권고값으로 초기화)
@@ -8821,8 +8836,9 @@ function updateManualCatAmount(cat, val) {
     STATE.catManualAmounts = _getCatRecommendedAmounts(r.amt);
   }
   const prevAmt = STATE.catManualAmounts[cat] || 0;
-  STATE.catManualAmounts[cat] = Math.max(-100, Math.min(100, parseInt(val, 10) || 0));
-  if (prevAmt !== STATE.catManualAmounts[cat]) writeAuditLog('축종별 손익 조정', `MODE 2 ${cat} 최종 조정폭 ${_fmtSignedWon(prevAmt)} → ${_fmtSignedWon(STATE.catManualAmounts[cat])}/kg`, 'AUTO SAVE', '사용자 조작');
+  const cap = (_getParentCatFromGroupKey(cat) === '양어') ? PRICING_RULES.MAX_PER_ROUND_FISH_CAP : PRICING_RULES.MAX_PER_ROUND_CAP;
+  STATE.catManualAmounts[cat] = Math.max(-cap, Math.min(cap, parseInt(val, 10) || 0));
+  if (prevAmt !== STATE.catManualAmounts[cat]) writeAuditLog('조정 단위별 손익 조정', `MODE 2 ${_getPricingGroupLabel(cat, true)} 최종 조정폭 ${_fmtSignedWon(prevAmt)} → ${_fmtSignedWon(STATE.catManualAmounts[cat])}/kg`, 'AUTO SAVE', '사용자 조작');
   recalcManualOpEstimate();
   // MODE 2 → MODE 1, 3 동기화
   _syncFromMode2ToMode13();
@@ -8836,12 +8852,15 @@ function recalcManualOpEstimate() {
   const amounts = _getFinalCatAmounts(r);
   const recovery = parseFloat(document.getElementById('revRecovery')?.value || 80) / 100;
   let totalOp = 0;
-  CATS.forEach(c => {
+  _getPricingGroups().forEach(g => {
+    const c = g.key;
     let qty;
-    if (DATA.loaded && DATA.agg.outlook.byCategory[c]?.qty) {
-      qty = DATA.agg.outlook.byCategory[c].qty.total;
+    if (_getPricingGroupLevel() === 'mid' && DATA.loaded && DATA.agg.outlook.byMid?.[c]?.metrics?.qty) {
+      qty = DATA.agg.outlook.byMid[c].metrics.qty.total;
+    } else if (DATA.loaded && DATA.agg.outlook.byCategory[g.cat]?.qty) {
+      qty = DATA.agg.outlook.byCategory[g.cat].qty.total;
     } else {
-      qty = DPDS_DEFAULT_CAT_QTY[c];
+      qty = DPDS_DEFAULT_CAT_QTY[g.cat];
     }
     const amt = amounts[c] || 0;
     totalOp += amt * qty * recovery; // 원
@@ -8901,11 +8920,12 @@ function applyManualToFinal() {
   // 비교 디스플레이
   const r = compute();
   const recommended = _getCatRecommendedAmounts(r.amt);
-  const diffSummary = CATS.map(c => {
+  const diffSummary = _getPricingGroups().map(g => {
+    const c = g.key;
     const rec = recommended[c];
     const fin = STATE.catManualAmounts[c];
     const diff = fin - rec;
-    return `${c}: 권고 ${_fmtSignedWon(rec, 1, '')} → 최종 ${_fmtSignedWon(fin, 1, '')}${diff !== 0 ? ` (<span style="color:${diff>0?'var(--danger)':'var(--success)'}">${_fmtSignedWon(diff, 1, '')}</span>)` : ''}`;
+    return `${_getPricingGroupLabel(c, _getPricingGroupLevel() === 'mid')}: 권고 ${_fmtSignedWon(rec, 1, '')} → 최종 ${_fmtSignedWon(fin, 1, '')}${diff !== 0 ? ` (<span style="color:${diff>0?'var(--danger)':'var(--success)'}">${_fmtSignedWon(diff, 1, '')}</span>)` : ''}`;
   }).join(' · ');
   const cmpEl = document.getElementById('manualVsRecommended');
   if (cmpEl) {
@@ -8937,7 +8957,7 @@ function renderRoundSchedulePolicy() {
 
   if (autoEl) {
     const schedule = _getScheduleForFinal(selectedCat);
-    const baseLabel = selectedCat === '전체' ? '전체 평균' : `${selectedCat} 기준`;
+    const baseLabel = selectedCat === '전체' ? '전체 평균' : `${_getPricingGroupLabel(selectedCat, _getPricingGroupLevel() === 'mid')} 기준`;
     const isCatEdit = selectedCat !== '전체';
 
     if (!schedule.scheduleAmounts.length) {
@@ -8954,13 +8974,13 @@ function renderRoundSchedulePolicy() {
           <span style="font-size: 12px; color: var(--ink-2);">${baseLabel} · 직접 조정</span>
           <input class="mode3-cat-input" type="number" min="1" max="12" step="1" value="${s.month}" title="적용 월"
             oninput="updateCatScheduleField('${selectedCat}', ${i}, 'month', this.value)">
-          <input class="mode3-cat-input" type="number" min="${selectedCat === '양어' ? -PRICING_RULES.MAX_PER_ROUND_FISH_CAP : -PRICING_RULES.MAX_PER_ROUND_CAP}" max="${selectedCat === '양어' ? PRICING_RULES.MAX_PER_ROUND_FISH_CAP : PRICING_RULES.MAX_PER_ROUND_CAP}" step="0.5" value="${_fmtWon(s.amt)}" title="조정폭(원/kg)"
+          <input class="mode3-cat-input" type="number" min="${_getParentCatFromGroupKey(selectedCat) === '양어' ? -PRICING_RULES.MAX_PER_ROUND_FISH_CAP : -PRICING_RULES.MAX_PER_ROUND_CAP}" max="${_getParentCatFromGroupKey(selectedCat) === '양어' ? PRICING_RULES.MAX_PER_ROUND_FISH_CAP : PRICING_RULES.MAX_PER_ROUND_CAP}" step="0.5" value="${_fmtWon(s.amt)}" title="조정폭(원/kg)"
             oninput="updateCatScheduleField('${selectedCat}', ${i}, 'amt', this.value)">
         </div>
       `).join('') + `
         <div style="display: grid; grid-template-columns: 46px minmax(110px, 1fr) 64px 72px; gap: 8px; align-items: center; padding: 6px 10px; background: var(--gold-bg, #fef9e8); border-radius: 5px; margin-top: 4px; border: 1px dashed var(--gold);">
           <span style="font-size: 11px; color: var(--ink-3); font-weight: 600;">합계</span>
-          <span style="font-size: 11px; color: var(--ink-3);">${baseLabel} · 상단 입력값으로 축종별 손익 즉시 반영</span>
+          <span style="font-size: 11px; color: var(--ink-3);">${baseLabel} · 상단 입력값으로 손익 즉시 반영</span>
           <span style="text-align:right; font-family: var(--font-mono); font-size: 11px; color: var(--ink-3);">${rows.length}회</span>
           <span style="font-family: var(--font-mono); font-size: 13px; color: var(--ink); font-weight: 700; text-align: right;">${_fmtSignedWon(sum)}</span>
         </div>
@@ -9045,7 +9065,7 @@ function renderRoundSchedulePolicy() {
         const hasCatManual = selectedCat !== '전체' && STATE.catSchedules?.[selectedCat]?.length;
         sub.textContent = selectedCat === '전체'
           ? (STATE.manualSchedule ? `수기 일정 적용 중 (룰 준수)` : `자동 산출 (룰 준수)`)
-          : (hasCatManual ? `축종별 직접 조정 적용 중 (룰 준수)${label}` : `자동 산출 (룰 준수)${label}`);
+          : (hasCatManual ? `직접 조정 적용 중 (룰 준수)${label}` : `자동 산출 (룰 준수)${label}`);
         sub.style.color = '';
       }
     }
@@ -9080,7 +9100,7 @@ function updateCatScheduleField(cat, idx, field, value) {
   const nextValRaw = parseFloat(value);
   let nextVal = isFinite(nextValRaw) ? nextValRaw : 0;
   if (field === 'month') nextVal = Math.max(1, Math.min(12, parseInt(nextVal, 10) || 1));
-  if (field === 'amt') { const cap = (cat === '양어') ? PRICING_RULES.MAX_PER_ROUND_FISH_CAP : PRICING_RULES.MAX_PER_ROUND_CAP; nextVal = Math.max(-cap, Math.min(cap, Math.round(nextVal * 10) / 10)); }
+  if (field === 'amt') { const cap = (_getParentCatFromGroupKey(cat) === '양어') ? PRICING_RULES.MAX_PER_ROUND_FISH_CAP : PRICING_RULES.MAX_PER_ROUND_CAP; nextVal = Math.max(-cap, Math.min(cap, Math.round(nextVal * 10) / 10)); }
   rows[idx][field] = nextVal;
   rows.forEach((s, i) => s.round = i + 1);
   STATE.catSchedules[cat] = rows;
@@ -9097,8 +9117,8 @@ function updateCatScheduleField(cat, idx, field, value) {
 
   if (prevVal !== nextVal) {
     writeAuditLog(
-      '축종별 회차 정책 조정',
-      `MODE 3 ${cat} ${idx + 1}차 ${field === 'month' ? '월' : '금액'} ${prevVal}${field === 'month' ? '월' : '원/kg'} → ${nextVal}${field === 'month' ? '월' : '원/kg'} · 최종 조정폭 ${_fmtSignedWon(prevAmt)} → ${_fmtSignedWon(totalAmt)}/kg`,
+      '단위별 회차 정책 조정',
+      `MODE 3 ${_getPricingGroupLabel(cat, true)} ${idx + 1}차 ${field === 'month' ? '월' : '금액'} ${prevVal}${field === 'month' ? '월' : '원/kg'} → ${nextVal}${field === 'month' ? '월' : '원/kg'} · 최종 조정폭 ${_fmtSignedWon(prevAmt)} → ${_fmtSignedWon(totalAmt)}/kg`,
       'AUTO SAVE',
       '사용자 조작'
     );
@@ -9121,7 +9141,7 @@ function resetCatSchedule(cat) {
   }
   if (!STATE.catSchedules || typeof STATE.catSchedules !== 'object' || Array.isArray(STATE.catSchedules)) STATE.catSchedules = {};
   delete STATE.catSchedules[cat];
-  writeAuditLog('축종별 회차 정책 조정', `MODE 3 ${cat} 축종별 월·조정폭 직접 조정 해제 — 룰 자동 산출로 복원`, 'AUTO SAVE', '사용자 조작');
+  writeAuditLog('단위별 회차 정책 조정', `MODE 3 ${_getPricingGroupLabel(cat, true)} 월·조정폭 직접 조정 해제 — 룰 자동 산출로 복원`, 'AUTO SAVE', '사용자 조작');
   STATE.mode3ScheduleCat = cat;
   STATE.finalMonthlyCat = cat;
   renderRoundSchedulePolicy();
@@ -9239,11 +9259,12 @@ function resetAllToScenario() {
 
 /* === 통합 시뮬레이터: 모든 수기 입력값을 최종안으로 적용 === */
 function applyAllToFinal() {
-  // 1. 축종별 수기값 검증/정리
+  // 1. 조정 단위별 수기값 검증/정리
   if (STATE.catManualAmounts) {
     Object.keys(STATE.catManualAmounts).forEach(c => {
       const v = parseInt(STATE.catManualAmounts[c], 10) || 0;
-      STATE.catManualAmounts[c] = Math.max(-100, Math.min(100, v));
+      const cap = (_getParentCatFromGroupKey(c) === '양어') ? PRICING_RULES.MAX_PER_ROUND_FISH_CAP : PRICING_RULES.MAX_PER_ROUND_CAP;
+      STATE.catManualAmounts[c] = Math.max(-cap, Math.min(cap, v));
     });
   }
   // 2. 수기 일정 검증/정리
@@ -9264,22 +9285,23 @@ function applyAllToFinal() {
   const r = compute();
   const recommended = _getCatRecommendedAmounts(r.amt);
   const finalAmounts = STATE.catManualAmounts || recommended;
-  const catDiff = CATS.map(c => {
+  const catDiff = _getPricingGroups().map(g => {
+    const c = g.key;
     const rec = recommended[c], fin = finalAmounts[c];
-    return fin !== rec ? `${c}: ${_fmtSignedWon(rec, 1, '')}→${_fmtSignedWon(fin, 1, '')}` : null;
+    return fin !== rec ? `${_getPricingGroupLabel(c, _getPricingGroupLevel() === 'mid')}: ${_fmtSignedWon(rec, 1, '')}→${_fmtSignedWon(fin, 1, '')}` : null;
   }).filter(x => x).join(' · ');
   const schedDiff = STATE.manualSchedule
     ? `전체 회차: ${STATE.manualSchedule.map(s => `${s.round}차 ${s.month}월 ${_fmtSignedWon(s.amt)}`).join(' · ')}`
     : '전체 회차: 룰 자동 적용';
   const catSchedDiff = STATE.catSchedules && Object.keys(STATE.catSchedules).length
-    ? ` · 축종별 회차: ${Object.keys(STATE.catSchedules).map(c => `${c} ${STATE.catSchedules[c].map(s => `${s.round}차 ${s.month}월 ${_fmtSignedWon(s.amt)}`).join('/')}`).join(' · ')}`
+    ? ` · 단위별 회차: ${Object.keys(STATE.catSchedules).map(c => `${_getPricingGroupLabel(c, _getPricingGroupLevel() === 'mid')} ${STATE.catSchedules[c].map(s => `${s.round}차 ${s.month}월 ${_fmtSignedWon(s.amt)}`).join('/')}`).join(' · ')}`
     : '';
   const cmpEl = document.getElementById('manualVsRecommended');
   if (cmpEl) {
-    cmpEl.innerHTML = `<strong style="color:var(--gold);">✓ 최종안 적용 완료:</strong> 평균 ${_fmtSignedWon(r.amt)}/kg · ${catDiff || '축종 권고값'} · ${schedDiff}${catSchedDiff}`;
+    cmpEl.innerHTML = `<strong style="color:var(--gold);">✓ 최종안 적용 완료:</strong> 평균 ${_fmtSignedWon(r.amt)}/kg · ${catDiff || '권고값'} · ${schedDiff}${catSchedDiff}`;
     cmpEl.style.display = 'block';
   }
-  writeAuditLog('최종안 적용', `평균 ${_fmtSignedWon(r.amt)}/kg · ${catDiff || '축종 권고값'} · ${schedDiff}`, 'AUTO SAVE', '사용자 조작');
+  writeAuditLog('최종안 적용', `평균 ${_fmtSignedWon(r.amt)}/kg · ${catDiff || '권고값'} · ${schedDiff}`, 'AUTO SAVE', '사용자 조작');
   showToast(`✓ 최종안 적용 완료 — 차트와 실행관리에 반영됨`, 'success');
   save();
 }
@@ -9362,13 +9384,110 @@ function _getDpdsCats() {
   return (typeof CATS !== 'undefined' && Array.isArray(CATS)) ? CATS : ['양계', '양돈', '축우', '양어'];
 }
 
+function _getPricingGroupLevel() {
+  return STATE.pricingGroupLevel === 'mid' ? 'mid' : 'cat';
+}
+
+function _getPricingGroups() {
+  const level = _getPricingGroupLevel();
+  if (level === 'mid' && DATA.loaded && DATA.agg?.outlook?.byMid) {
+    const groups = Object.keys(DATA.agg.outlook.byMid).map(key => {
+      const row = DATA.agg.outlook.byMid[key];
+      const qty = row?.metrics?.qty?.total || 0;
+      return {
+        key,
+        cat: row.cat1,
+        mid: row.cat2 || '_',
+        label: row.cat2 && row.cat2 !== '_' ? row.cat2 : row.cat1,
+        subLabel: row.cat1,
+        qty
+      };
+    }).filter(g => g.cat);
+    const catOrder = _getDpdsCats();
+    groups.sort((a, b) => {
+      const ai = catOrder.includes(a.cat) ? catOrder.indexOf(a.cat) : 999;
+      const bi = catOrder.includes(b.cat) ? catOrder.indexOf(b.cat) : 999;
+      if (ai !== bi) return ai - bi;
+      return a.label.localeCompare(b.label, 'ko');
+    });
+    if (groups.length) return groups;
+  }
+  return _getDpdsCats().map(cat => ({
+    key: cat,
+    cat,
+    mid: '',
+    label: cat,
+    subLabel: '',
+    qty: DATA.loaded && DATA.agg?.outlook?.byCategory?.[cat]?.qty
+      ? DATA.agg.outlook.byCategory[cat].qty.total
+      : (DPDS_DEFAULT_CAT_QTY[cat] || 0)
+  }));
+}
+
+function _getPricingGroupByKey(key) {
+  return _getPricingGroups().find(g => g.key === key) || null;
+}
+
+function _getParentCatFromGroupKey(key) {
+  const g = _getPricingGroupByKey(key);
+  if (g) return g.cat;
+  const s = String(key || '');
+  return s.includes('|') ? s.split('|')[0] : s;
+}
+
+function _getPricingGroupLabel(key, includeCat = false) {
+  if (key === '전체') return '전체';
+  const g = _getPricingGroupByKey(key);
+  if (!g) return String(key || '');
+  return includeCat && g.subLabel ? `${g.subLabel} · ${g.label}` : g.label;
+}
+
+function _getPricingGroupKeyForSku(sku) {
+  return _getPricingGroupLevel() === 'mid'
+    ? `${sku.cat1}|${sku.cat2 || '_'}`
+    : sku.cat1;
+}
+
+function _renderPricingGroupLevelSwitch() {
+  const el = document.getElementById('pricingGroupLevelSwitch');
+  if (!el) return;
+  const level = _getPricingGroupLevel();
+  el.innerHTML = ['cat', 'mid'].map(v => {
+    const active = level === v;
+    const label = v === 'cat' ? '대분류' : '중분류';
+    const tip = v === 'cat'
+      ? '기존 방식입니다. 양계·양돈·축우·양어 단위로 조정합니다.'
+      : '업로드 데이터의 대분류|중분류 단위로 조정합니다. 중분류별 판매량으로 OP 영향을 계산합니다.';
+    return `<button class="btn${active ? ' gold' : ''}" style="font-size: 10.5px; padding: 4px 9px; flex:1;" onclick="setPricingGroupLevel('${v}')" data-tip="${tip}">${label}</button>`;
+  }).join('');
+}
+
+function setPricingGroupLevel(level) {
+  const next = level === 'mid' ? 'mid' : 'cat';
+  if (STATE.pricingGroupLevel === next) return;
+  STATE.pricingGroupLevel = next;
+  STATE.catManualAmounts = null;
+  STATE.catNoIncrease = {};
+  STATE.catSchedules = {};
+  STATE.finalMonthlyCat = '전체';
+  STATE.mode3ScheduleCat = '전체';
+  renderManualCatInputs();
+  renderRoundSchedulePolicy();
+  _updateMode1Display();
+  recalcManualOpEstimate();
+  renderDecisionCharts();
+  save();
+  showToast(`MODE 2 조정 단위: ${next === 'mid' ? '중분류' : '대분류'}`, 'success');
+}
+
 function _sanitizeDpdsCat(cat) {
-  const cats = _getDpdsCats();
-  return (cat === '전체' || cats.includes(cat)) ? cat : '전체';
+  const cats = _getPricingGroups().map(g => g.key);
+  const groupKeys = _getPricingGroups().map(g => g.key);
+  return (cat === '전체' || cats.includes(cat) || groupKeys.includes(cat)) ? cat : '전체';
 }
 
 function _getFinalCatTabs() {
-  return ['전체', ..._getDpdsCats()];
+  return ['전체', ..._getPricingGroups().map(g => g.key)];
 }
 
 function _renderFinalCatTabs(elId, selected, setterName) {
@@ -9377,7 +9496,8 @@ function _renderFinalCatTabs(elId, selected, setterName) {
   selected = _sanitizeDpdsCat(selected);
   el.innerHTML = _getFinalCatTabs().map(cat => {
     const active = cat === selected;
-    return `<button class="btn${active ? ' gold' : ''}" style="font-size: 11px; padding: 5px 10px;" onclick="${setterName}('${cat}')" data-tip="${cat === '전체' ? '전체 축종 통합' : cat + ' 기준'}으로 월별 OP와 회차 산출 결과를 확인합니다.">${cat}</button>`;
+    const label = _getPricingGroupLabel(cat, _getPricingGroupLevel() === 'mid');
+    return `<button class="btn${active ? ' gold' : ''}" style="font-size: 11px; padding: 5px 10px;" onclick="${setterName}('${cat}')" data-tip="${cat === '전체' ? '전체 통합' : label + ' 기준'}으로 월별 OP와 회차 산출 결과를 확인합니다.">${label}</button>`;
   }).join('');
 }
 
@@ -9415,6 +9535,27 @@ function _getOpDataBundle(cat) {
       qty = DATA.agg.outlook?.byMetric?.qty?.total || Object.values(DPDS_DEFAULT_CAT_QTY).reduce((s, v) => s + v, 0);
       // v40: 비연동 전망 물량 (판가 추가 OP 산출에 사용)
       qtyNonLinked = DATA.aggNonLinked?.outlook?.byMetric?.qty?.total || qty;
+    } else if (String(cat).includes('|')) {
+      const parentCat = _getParentCatFromGroupKey(cat);
+      const pMid = DATA.agg.plan?.byMid?.[cat]?.metrics;
+      const oMid = DATA.agg.outlook?.byMid?.[cat]?.metrics;
+      const p = pMid?.op;
+      const o = oMid?.op;
+      if (p?.months) planMonthly = p.months.map(v => v / 1e8);
+      if (o?.months) outlookMonthly = o.months.map(v => v / 1e8);
+      planTotalOku = (p?.total || 0) / 1e8;
+      outlookTotalOku = (o?.total || 0) / 1e8;
+      qty = oMid?.qty?.total || 0;
+      qtyNonLinked = DATA.aggNonLinked?.outlook?.byMid?.[cat]?.metrics?.qty?.total || qty;
+      if (!p && !o) {
+        const w = DPDS_DEFAULT_CAT_WEIGHT[parentCat] || 0.25;
+        planMonthly = DPDS_DEFAULT_MONTHLY_PLAN.map(v => v * w);
+        outlookMonthly = DPDS_DEFAULT_MONTHLY_OUTLOOK.map(v => v * w);
+        planTotalOku = planMonthly.reduce((s, v) => s + v, 0);
+        outlookTotalOku = outlookMonthly.reduce((s, v) => s + v, 0);
+        qty = DPDS_DEFAULT_CAT_QTY[parentCat] || 0;
+        qtyNonLinked = qty;
+      }
     } else {
       const p = DATA.agg.plan?.byCategory?.[cat]?.op;
       const o = DATA.agg.outlook?.byCategory?.[cat]?.op;
@@ -9442,6 +9583,15 @@ function _getOpDataBundle(cat) {
       outlookTotalOku = 25;
       qty = Object.values(DPDS_DEFAULT_CAT_QTY).reduce((s, v) => s + v, 0);
       qtyNonLinked = qty;
+    } else if (String(cat).includes('|')) {
+      const parentCat = _getParentCatFromGroupKey(cat);
+      const w = DPDS_DEFAULT_CAT_WEIGHT[parentCat] || 0.25;
+      planMonthly = DPDS_DEFAULT_MONTHLY_PLAN.map(v => v * w);
+      outlookMonthly = DPDS_DEFAULT_MONTHLY_OUTLOOK.map(v => v * w);
+      planTotalOku = planMonthly.reduce((s, v) => s + v, 0);
+      outlookTotalOku = outlookMonthly.reduce((s, v) => s + v, 0);
+      qty = DPDS_DEFAULT_CAT_QTY[parentCat] || 0;
+      qtyNonLinked = qty;
     } else {
       const w = DPDS_DEFAULT_CAT_WEIGHT[cat] || 0.25;
       planMonthly = DPDS_DEFAULT_MONTHLY_PLAN.map(v => v * w);
@@ -9465,7 +9615,8 @@ function _getMode3StartMonth(r) {
 
 function _normalizeScheduleRows(rows, cat) {
   // 축종별 회차당 상한: 양어 500, 일반 100 (clamp 한도도 축종에 맞춰 적용)
-  const cap = (cat === '양어') ? PRICING_RULES.MAX_PER_ROUND_FISH_CAP : PRICING_RULES.MAX_PER_ROUND_CAP;
+  const parentCat = _getParentCatFromGroupKey(cat);
+  const cap = (parentCat === '양어') ? PRICING_RULES.MAX_PER_ROUND_FISH_CAP : PRICING_RULES.MAX_PER_ROUND_CAP;
   return (Array.isArray(rows) ? rows : [])
     .map((s, i) => ({
       round: i + 1,
@@ -9553,7 +9704,7 @@ function _calcFinalMonthlyOpForCat(cat, finalCats, scheduleAmounts, scheduleMont
 
 function _calcAggregateFinalMonthlyOp(finalCats, recovery) {
   // 전체 탭은 축종별 직접 조정 일정이 있으면 각 축종 일정대로 OP를 합산한다.
-  const cats = _getDpdsCats();
+  const cats = _getPricingGroups().map(g => g.key);
   const planMonthly = Array(12).fill(0);
   const outlookMonthly = Array(12).fill(0);
   const finalMonthly = Array(12).fill(0);
@@ -9618,7 +9769,7 @@ function _renderMode3CatOpSummary(finalCats, r) {
   if (!el) return;
   const recovery = parseFloat(document.getElementById('revRecovery')?.value || 80) / 100;
   const selected = _sanitizeDpdsCat(STATE.mode3ScheduleCat);
-  const cats = _getDpdsCats();
+  const cats = _getPricingGroups().map(g => g.key);
   // v34: 축종별 OP는 손익 구성요소로부터 재계산되므로 합 = 전체 자동 일치
   let sumPlan = 0, sumOutlook = 0, sumFinal = 0;
   const rowData = cats.map(cat => {
@@ -9632,6 +9783,7 @@ function _renderMode3CatOpSummary(finalCats, r) {
 
   const rows = rowData.map(({ cat, sch, c }) => {
     const active = selected === cat;
+    const label = _getPricingGroupLabel(cat, _getPricingGroupLevel() === 'mid');
     const sourceLabel = sch.source === 'cat-manual' ? '직접' : '룰';
     // 전망 OP(판가 인상 전) → 예상 OP(인상 후) 증가분
     const upDelta = c.finalTotalOku - c.outlookTotalOku;
@@ -9647,13 +9799,13 @@ function _renderMode3CatOpSummary(finalCats, r) {
       : `<span style="color:${achColor}; font-weight:700;">${c.ach}%</span>`;
     // v44: 조정폭이 회차당 상한(일반 100·양어 500)에 도달했는지 표시
     const catAmt = finalCats?.[cat] || 0;
-    const catCap = (cat === '양어') ? 500 : 100;
+    const catCap = (_getParentCatFromGroupKey(cat) === '양어') ? 500 : 100;
     const atCap = catAmt >= catCap - 0.5;
     const capTag = atCap
       ? `<br><span style="font-size:8px; color:var(--danger); font-weight:600;" title="회차당 최대 조정폭 상한 도달 — 판가만으로 목표 달성 한계. 물량·원가 대책 병행 필요">상한 도달</span>`
       : '';
     return `<tr style="${active ? 'background: var(--gold-bg, #fef9e8);' : ''}">
-      <td style="font-weight: 700; color: ${active ? 'var(--gold)' : 'var(--ink)'};">${cat}</td>
+      <td style="font-weight: 700; color: ${active ? 'var(--gold)' : 'var(--ink)'};">${label}</td>
       <td style="text-align:right; font-family: var(--font-mono);">${c.planTotalOku.toFixed(1)}억</td>
       <td style="text-align:right; font-family: var(--font-mono); color:${c.outlookTotalOku < 0 ? 'var(--danger)' : 'var(--ink-3)'};">${c.outlookTotalOku.toFixed(1)}억</td>
       <td style="text-align:right; font-family: var(--font-mono); color:${c.finalTotalOku < 0 ? 'var(--danger)' : 'var(--ink)'};">${c.finalTotalOku.toFixed(1)}억${deltaStr}</td>
@@ -9680,7 +9832,7 @@ function _renderMode3CatOpSummary(finalCats, r) {
     <td style="text-align:right; font-family: var(--font-mono); color: var(--ink-3); font-size: 9.5px;">전체</td>
   </tr>`;
 
-  const selectedLabel = selected === '전체' ? '전체 평균' : `${selected} 기준`;
+  const selectedLabel = selected === '전체' ? '전체 평균' : `${_getPricingGroupLabel(selected, _getPricingGroupLevel() === 'mid')} 기준`;
   const schForLabel = _getScheduleForFinal(selected === '전체' ? '전체' : selected);
   const roundLabel = schForLabel.scheduleAmounts.length
     ? schForLabel.scheduleMonths.map((m, i) => `${i + 1}차 ${m}월 ${_fmtSignedWon(schForLabel.scheduleAmounts[i])}`).join(' · ')
@@ -9973,7 +10125,7 @@ function _renderFinalCharts() {
       const roundsLabel = scheduleAmounts.length
         ? scheduleMonths.map((mo, i) => `${i+1}차 ${mo}월 ${_fmtSignedWon(scheduleAmounts[i])}`).join(' · ')
         : '조정 회차 없음';
-      const catLabel = selectedMonthlyCat === '전체' ? '전체' : selectedMonthlyCat;
+      const catLabel = selectedMonthlyCat === '전체' ? '전체' : _getPricingGroupLabel(selectedMonthlyCat, _getPricingGroupLevel() === 'mid');
       subEl.innerHTML = `${catLabel} · 목표(Plan) <strong>${planTotalOku.toFixed(1)}억</strong> · 예상 OP <strong style="color:#8B1538;">${finalTotalOku.toFixed(1)}억</strong> ` +
         `(달성률 <strong style="color:${ach>=90?'var(--success)':ach>=70?'var(--gold)':'var(--danger)'};">${ach}%</strong>) · ${roundsLabel}`;
     }
@@ -9982,14 +10134,15 @@ function _renderFinalCharts() {
   /* ============ 2. 축종별 조정폭 (권고 vs 최종안) ============ */
   if (elC) {
     destroyChart('chartFinalCatAmt');
+    const groups = _getPricingGroups();
     charts['chartFinalCatAmt'] = new Chart(elC, {
       type: 'bar',
       data: {
-        labels: CATS,
+        labels: groups.map(g => _getPricingGroupLevel() === 'mid' ? `${g.cat} · ${g.label}` : g.label),
         datasets: [
           {
             label: '권고 (2안)',
-            data: CATS.map(c => recommended[c] || 0),
+            data: groups.map(g => recommended[g.key] || 0),
             backgroundColor: '#cbd5e1', borderColor: '#94a3b8',
             borderWidth: 1, borderRadius: 4,
             datalabels: {
@@ -10000,7 +10153,7 @@ function _renderFinalCharts() {
           },
           {
             label: '경영진 최종안',
-            data: CATS.map(c => finalCats[c] || 0),
+            data: groups.map(g => finalCats[g.key] || 0),
             backgroundColor: '#8B1538', borderRadius: 4,
             datalabels: {
               display: true, anchor: 'end', align: 'top', offset: 2,
@@ -10027,7 +10180,7 @@ function _renderFinalCharts() {
 
     const subC = document.getElementById('finalCatAmtSub');
     if (subC) {
-      const diff = CATS.reduce((s, c) => s + Math.abs((finalCats[c] || 0) - (recommended[c] || 0)), 0);
+      const diff = groups.reduce((s, g) => s + Math.abs((finalCats[g.key] || 0) - (recommended[g.key] || 0)), 0);
       subC.innerHTML = diff > 0
         ? `경영진 조정 적용 (총 차이 <strong style="color:#8B1538;">${diff}원</strong>) · MODE 2 또는 MODE 3 수정값 반영 중`
         : `권고와 동일 (수기 조정 없음)`;
@@ -11374,13 +11527,15 @@ function computeSkuPricing() {
 
   const result = filtered.map(sku => {
     const avgPrice = sku.rev / sku.qty;
-    const skuAmt = catAmounts[sku.cat1] !== undefined ? catAmounts[sku.cat1] : amt;
+    const pricingKey = _getPricingGroupKeyForSku(sku);
+    const fallbackAmt = catAmounts[sku.cat1] !== undefined ? catAmounts[sku.cat1] : amt;
+    const skuAmt = catAmounts[pricingKey] !== undefined ? catAmounts[pricingKey] : fallbackAmt;
     const applyYn = Math.abs(skuAmt) > 0.0001;
     const newPrice = Math.max(0, avgPrice + skuAmt);
 
     const schedule = [];
     if (applyYn) {
-      const sch = _getScheduleForFinal(sku.cat1);
+      const sch = _getScheduleForFinal(pricingKey);
       const rows = sch.rows && sch.rows.length ? sch.rows : sch.scheduleAmounts.map((a, i) => ({ round: i + 1, month: sch.scheduleMonths[i], amt: a }));
       rows.forEach(s => schedule.push({ round: s.round, month: s.month, amt: Math.round((s.amt || 0) * 10) / 10 }));
     }
@@ -11398,10 +11553,10 @@ function computeSkuPricing() {
       ...sku,
       avgPrice: Math.round(avgPrice),
       amt: skuAmt,
-      recommendedAmt: recommended[sku.cat1] || amt,
+      recommendedAmt: recommended[pricingKey] !== undefined ? recommended[pricingKey] : (recommended[sku.cat1] || amt),
       newPrice: Math.round(newPrice),
       applyYn,
-      excludeReason: applyYn ? '' : 'MODE 2 축종별 가격 조정 미적용(동결)',
+      excludeReason: applyYn ? '' : 'MODE 2 조정 단위별 가격 조정 미적용(동결)',
       schedule,
       extraRevWon: Math.round(extraRev),
       extraOpWon: Math.round(extraOp)
@@ -11415,7 +11570,7 @@ function computeSkuPricing() {
       excludedSkus: result.filter(s => !s.applyYn).length,
       scopeLv, amt, rounds: r.rounds, startMonth: r.startMonth,
       catAmounts,
-      excludedCats: CATS.filter(c => !_isCatPriceActive(c)),
+      excludedCats: _getPricingGroups().filter(g => !_isCatPriceActive(g.key)).map(g => _getPricingGroupLabel(g.key, _getPricingGroupLevel() === 'mid')),
       schedule: r.scheduleAmounts.map((a, i) => ({ round: i+1, month: r.scheduleMonths[i], amt: a }))
     }
   };
@@ -11518,7 +11673,7 @@ function exportSkuPricingExcel() {
     ['대상 SKU 수', sku.skus.length],
     ['적용 SKU 수', sku.summary.appliedSkus],
     ['미적용 SKU 수', sku.summary.excludedSkus],
-    ['미적용 축종', sku.summary.excludedCats.length ? sku.summary.excludedCats.join(', ') : '없음'],
+    [_getPricingGroupLevel() === 'mid' ? '미적용 중분류' : '미적용 축종', sku.summary.excludedCats.length ? sku.summary.excludedCats.join(', ') : '없음'],
     ['실행 체크리스트 진행', `${done}/${total}`],
     ['잔여 월 매출 영향 (억)', (sku.skus.reduce((s,x)=>s+x.extraRevWon,0)/1e8).toFixed(1)],
     ['잔여 월 OP 영향 (억)', (sku.skus.reduce((s,x)=>s+x.extraOpWon,0)/1e8).toFixed(1)]
@@ -11550,19 +11705,21 @@ function exportSkuPricingExcel() {
   });
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(schedRows), '회차별_적용일정');
 
-  // Sheet 4: 축종별 집계
+  // Sheet 4: 조정 단위별 집계
   const aggBy = {};
   sku.skus.forEach(s => {
-    if (!aggBy[s.cat1]) aggBy[s.cat1] = { skus: 0, rev: 0, op: 0 };
-    aggBy[s.cat1].skus++;
-    aggBy[s.cat1].rev += s.extraRevWon;
-    aggBy[s.cat1].op += s.extraOpWon;
+    const key = _getPricingGroupKeyForSku(s);
+    const label = _getPricingGroupLevel() === 'mid' ? `${s.cat1} · ${s.cat2}` : s.cat1;
+    if (!aggBy[key]) aggBy[key] = { label, skus: 0, rev: 0, op: 0 };
+    aggBy[key].skus++;
+    aggBy[key].rev += s.extraRevWon;
+    aggBy[key].op += s.extraOpWon;
   });
-  const aggRows = [['축종','대상SKU수','잔여월매출영향(억)','잔여월OP영향(억)']];
-  Object.entries(aggBy).forEach(([cat, v]) => {
-    aggRows.push([cat, v.skus, (v.rev/1e8).toFixed(2), (v.op/1e8).toFixed(2)]);
+  const aggRows = [[_getPricingGroupLevel() === 'mid' ? '중분류' : '축종','대상SKU수','잔여월매출영향(억)','잔여월OP영향(억)']];
+  Object.values(aggBy).forEach(v => {
+    aggRows.push([v.label, v.skus, (v.rev/1e8).toFixed(2), (v.op/1e8).toFixed(2)]);
   });
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aggRows), '축종별_집계');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aggRows), _getPricingGroupLevel() === 'mid' ? '중분류별_집계' : '축종별_집계');
 
   XLSX.writeFile(wb, `DPDS_제품별_가격조정안_${new Date().toISOString().slice(0,10)}.xlsx`);
   writeAuditLog('실행관리 다운로드', `제품별 가격 조정안 Excel · 적용 ${sku.summary.appliedSkus}개 · 미적용 ${sku.summary.excludedSkus}개`, 'AUTO SAVE', '사용자 조작');
@@ -11572,22 +11729,23 @@ function exportSkuPricingExcel() {
 function _buildCustomerNoticeEmail() {
   const r = compute();
   const finalCats = _getFinalCatAmounts(r);
-  const appliedCats = CATS.filter(c => Math.abs(finalCats[c] || 0) > 0.0001);
-  const excludedCats = CATS.filter(c => Math.abs(finalCats[c] || 0) <= 0.0001);
+  const groups = _getPricingGroups();
+  const appliedCats = groups.filter(g => Math.abs(finalCats[g.key] || 0) > 0.0001).map(g => g.key);
+  const excludedCats = groups.filter(g => Math.abs(finalCats[g.key] || 0) <= 0.0001).map(g => g.key);
   const firstMonth = Math.min(...appliedCats.map(c => {
     const sch = _getScheduleForFinal(c);
     return sch.scheduleMonths[0] || r.startMonth || 5;
   }).concat([r.startMonth || 5]));
-  const catLines = CATS.map(c => `- ${c}: ${Math.abs(finalCats[c] || 0) > 0.0001 ? `${_adjustmentWord(finalCats[c])} ${_fmtSignedWon(finalCats[c])}/kg` : '동결 또는 가격 조정 미적용'}`).join('\n');
+  const catLines = groups.map(g => `- ${_getPricingGroupLabel(g.key, _getPricingGroupLevel() === 'mid')}: ${Math.abs(finalCats[g.key] || 0) > 0.0001 ? `${_adjustmentWord(finalCats[g.key])} ${_fmtSignedWon(finalCats[g.key])}/kg` : '동결 또는 가격 조정 미적용'}`).join('\n');
   const schedLines = appliedCats.length
     ? appliedCats.map(c => {
         const sch = _getScheduleForFinal(c);
         const rounds = sch.scheduleAmounts.length ? sch.scheduleMonths.map((m, i) => `${i+1}차 ${m}월 1일 ${_fmtSignedWon(sch.scheduleAmounts[i])}/kg`).join(', ') : '회차 없음';
-        return `- ${c}: ${rounds}`;
+        return `- ${_getPricingGroupLabel(c, _getPricingGroupLevel() === 'mid')}: ${rounds}`;
       }).join('\n')
     : '- 금번 적용 대상 없음';
   const subject = `[대한사료] 배합사료 제품 가격 조정 안내 (${firstMonth}월 적용 예정)`;
-  const body = `안녕하세요. 대한사료입니다.\n\n당사는 최근 공개 시장지표와 자사 ERP 손익 분석 결과를 바탕으로 배합사료 제품 가격 조정안을 내부 의사결정 절차에 따라 확정하였습니다.\n\n1. 적용 예정일\n- ${firstMonth}월 1일부 순차 적용\n\n2. 축종별 조정 내용\n${catLines}\n\n3. 회차별 적용 일정\n${schedLines}\n\n4. 조정 사유\n- 공개 원재료·환율·해상운임 지표 변동\n- 자사 사업계획 대비 영업이익 차질 및 제품별 원가 구조 분석\n- 제품별 BOM 및 자사 판매 데이터 기반 산식 적용\n\n5. 업무 협조 요청\n- 적용 전 계약·발주·납품 일정에 대한 문의는 담당 영업사원 또는 영업지원팀으로 연락 부탁드립니다.\n- 본 안내는 당사 내부 의사결정 및 자사 원가 분석에 따른 독립적인 조정 사항입니다.\n\n감사합니다.\n대한사료 영업지원팀`;
+  const body = `안녕하세요. 대한사료입니다.\n\n당사는 최근 공개 시장지표와 자사 ERP 손익 분석 결과를 바탕으로 배합사료 제품 가격 조정안을 내부 의사결정 절차에 따라 확정하였습니다.\n\n1. 적용 예정일\n- ${firstMonth}월 1일부 순차 적용\n\n2. ${_getPricingGroupLevel() === 'mid' ? '중분류별' : '축종별'} 조정 내용\n${catLines}\n\n3. 회차별 적용 일정\n${schedLines}\n\n4. 조정 사유\n- 공개 원재료·환율·해상운임 지표 변동\n- 자사 사업계획 대비 영업이익 차질 및 제품별 원가 구조 분석\n- 제품별 BOM 및 자사 판매 데이터 기반 산식 적용\n\n5. 업무 협조 요청\n- 적용 전 계약·발주·납품 일정에 대한 문의는 담당 영업사원 또는 영업지원팀으로 연락 부탁드립니다.\n- 본 안내는 당사 내부 의사결정 및 자사 원가 분석에 따른 독립적인 조정 사항입니다.\n\n감사합니다.\n대한사료 영업지원팀`;
   return { subject, body, firstMonth, appliedCats, excludedCats };
 }
 
@@ -11606,7 +11764,7 @@ function renderCustomerNoticePreview() {
   }
   const mail = _buildCustomerNoticeEmail();
   preview.textContent = `제목: ${mail.subject}\n\n${mail.body}`;
-  if (sub) sub.textContent = `표준 초안 · 조정 축종 ${mail.appliedCats.length}개 · 동결/미적용 축종 ${mail.excludedCats.length}개`;
+  if (sub) sub.textContent = `표준 초안 · 조정 단위 ${mail.appliedCats.length}개 · 동결/미적용 ${mail.excludedCats.length}개`;
   [btnTxt, btnHtml].forEach(btn => { if (btn) { btn.disabled = false; btn.style.opacity = '1'; btn.style.cursor = 'pointer'; } });
 }
 
