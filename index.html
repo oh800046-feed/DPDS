@@ -3893,10 +3893,10 @@ body[data-width="full"]     { --content-max: none; }
           </div>
 
           <!-- 중: Mode 2 — 축종별 수기 입력 -->
-          <div data-tip="MODE 2: 대분류 또는 중분류 단위로 조정폭을 차등 조정합니다. ▸ 권고값은 부모 축종 BOM 비율을 반영하고, 중분류 선택 시 판매량 가중평균은 중분류 판매량 기준으로 계산합니다. ▸ 값 변경 시 가중평균이 MODE 1로, 총합이 MODE 3 회차로 자동 반영." style="background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 14px; min-width: 0; overflow: hidden;">
-            <div style="font-family: var(--font-mono); font-size: 10px; color: var(--gold); letter-spacing: .12em; margin-bottom: 8px;">MODE 2 · 조정 단위 선택</div>
+          <div data-tip="MODE 2: 대분류 단위로 조정폭을 차등 조정합니다. ▸ 권고값은 축종별 BOM 비율을 반영합니다. ▸ 값 변경 시 가중평균이 MODE 1로, 총합이 MODE 3 회차로 자동 반영됩니다." style="background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 14px; min-width: 0; overflow: hidden;">
+            <div style="font-family: var(--font-mono); font-size: 10px; color: var(--gold); letter-spacing: .12em; margin-bottom: 8px;">MODE 2 · 대분류 조정</div>
             <h4 style="font-family: var(--font-display); font-size: 13px; font-weight: 600; margin: 0 0 10px;">조정폭 (경영진 최종안)</h4>
-            <div id="pricingGroupLevelSwitch" style="display:flex; gap:4px; margin-bottom:8px;"></div>
+            <div id="pricingGroupLevelSwitch" style="display:none;"></div>
             <div id="catManualInputs" style="display: flex; flex-direction: column; gap: 5px; margin-bottom: 10px;">
               <!-- JS로 렌더링 -->
             </div>
@@ -4000,10 +4000,10 @@ body[data-width="full"]     { --content-max: none; }
 
       <div class="card">
         <div class="h">
-          <h3>감사 로그 — 클릭·조정 자동 기록</h3>
+          <h3>감사 로그 — 지정 액션 기록</h3>
           <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
             <span class="sub" id="logCount">0 entries · 자동 저장</span>
-            <button class="btn" style="font-size:10.5px; padding:4px 8px;" onclick="exportLog()" data-tip="저장된 클릭·조정·결재 로그를 CSV로 다운로드합니다.">📥 로그 저장</button>
+            <button class="btn" style="font-size:10.5px; padding:4px 8px;" onclick="exportLog()" data-tip="저장된 지정 액션 로그를 CSV로 다운로드합니다.">📥 로그 저장</button>
           </div>
         </div>
         <div class="log-tbl-wrap">
@@ -5479,6 +5479,8 @@ let STATE = {
   startMonthOverride: null,      // 최초 적용 시기(1차 조정월) 직접 입력값. null이면 timing 축 기본값 사용
   pricingScenarioTarget: null,   // 마지막 시나리오 목표 달성률. 5축 조정 후 중분류 역산 캐시 유지용
   decisions: [],
+  interactionLog: [],
+  auditLogPolicyV2: false,
   decisionStatus: 'pending',
   realdata: false,
   catManualAmounts: null,        // 수기 입력 조정폭 (대분류 또는 대분류|중분류)
@@ -5523,8 +5525,15 @@ function restore() {
   STATE.decisionStatus = 'pending';
   // 시작 시 항상 프로세스 개요 (Home) 페이지로 진입 (이전 페이지 기억 무시)
   STATE.view = 'view-home';
-  // 의사결정 로그·클릭/조정 로그·컴플라이언스 점검 이력은 보존 (감사로그 5년 보관 정책)
+  // 지정된 핵심 액션만 로그에 남기도록 정책 전환. 기존 잡음 로그는 최초 1회 삭제.
   if (!Array.isArray(STATE.decisions)) STATE.decisions = [];
+  if (!Array.isArray(STATE.interactionLog)) STATE.interactionLog = [];
+  if (STATE.auditLogPolicyV2 !== true) {
+    STATE.decisions = [];
+    STATE.interactionLog = [];
+    STATE.auditLogPolicyV2 = true;
+    save();
+  }
   if (STATE.decisions.length > 2000) STATE.decisions = STATE.decisions.slice(0, 2000);
   if (!Array.isArray(STATE.complianceHistory)) STATE.complianceHistory = [];
   // v25: 기존 5단계 조정폭 축(0:+8,1:+12,2:+18,3:+23,4:+28)을 8단계 조정폭 축으로 1회 마이그레이션
@@ -5538,7 +5547,13 @@ function restore() {
   if (!STATE.catSchedules || typeof STATE.catSchedules !== 'object' || Array.isArray(STATE.catSchedules)) STATE.catSchedules = {};
   if (!STATE.catNoIncrease || typeof STATE.catNoIncrease !== 'object' || Array.isArray(STATE.catNoIncrease)) STATE.catNoIncrease = {};
   if (!STATE.catManualAmountsByLevel || typeof STATE.catManualAmountsByLevel !== 'object' || Array.isArray(STATE.catManualAmountsByLevel)) STATE.catManualAmountsByLevel = {};
-  if (STATE.pricingGroupLevel !== 'mid') STATE.pricingGroupLevel = 'cat';
+  STATE.pricingGroupLevel = 'cat';
+  if (STATE.catManualAmounts && Object.keys(STATE.catManualAmounts).length && Object.keys(STATE.catManualAmounts).every(k => String(k).includes('|'))) {
+    STATE.catManualAmounts = _clonePlain(STATE.catManualAmountsByLevel.cat) || null;
+    STATE.catSchedules = {};
+    STATE.finalMonthlyCat = '전체';
+    STATE.mode3ScheduleCat = '전체';
+  }
   if (typeof STATE.roundIntervalRuleEnabled !== 'boolean') STATE.roundIntervalRuleEnabled = true;
   if (STATE.startMonthOverride != null) {
     const sm = parseInt(STATE.startMonthOverride, 10);
@@ -6584,6 +6599,9 @@ function selectScenario(num) {
   };
   const key = map[num] || map[String(num)] || 'balanced';
   applyPreset(key);
+  if ([1, 2, 3].includes(Number(num))) {
+    writeAuditLog('판가 시나리오 선택', `${PRESETS[key].num} · ${PRESETS[key].name}`, 'AUTO SAVE', '사용자 조작');
+  }
   // 카드 강조 — 양수/음수 카드 모두 처리
   document.querySelectorAll('#view-scenario .scen-card').forEach(c => c.classList.remove('selected'));
   // onclick 속성에서 같은 num을 가진 카드를 selected로 표시
@@ -6768,12 +6786,16 @@ function renderChecks() {
 /* 카드 전체 클릭: 체크 토글 (체크 = 상세 자동 표시) */
 function toggleCheckCard(id) {
   STATE.checks[id] = !STATE.checks[id];
+  const item = CHECKS.find(c => c.id === id);
+  writeAuditLog('리스크 자가진단', `${item?.label || id} · ${STATE.checks[id] ? '체크' : '해제'}`, 'AUTO SAVE', '사용자 조작');
   renderChecks();
   save();
 }
 
 function toggleCheck(id) {
   STATE.checks[id] = !STATE.checks[id];
+  const item = CHECKS.find(c => c.id === id);
+  writeAuditLog('리스크 자가진단', `${item?.label || id} · ${STATE.checks[id] ? '체크' : '해제'}`, 'AUTO SAVE', '사용자 조작');
   renderChecks();
   save();
 }
@@ -7016,15 +7038,7 @@ function recordDecision(action) {
 
   const preset = PRESETS[STATE.scenario];
   const detail = `${preset?.num || '커스텀'} · ${_fmtSignedWon(r.amt)}/kg · ${r.rounds}회 · 효율 ${_fmtSignedWon(r.efficiency)}/회 · OP ${_fmtSignedOku(r.opAnnual)}`;
-  STATE.decisions.unshift({
-    time: fmt.date(),
-    user: '경영진',
-    action,
-    detail,
-    law: '§40 OK',
-    actionClass: action === '승인' ? 'pos' : action === '보류' ? 'warn' : 'neg'
-  });
-  if (STATE.decisions.length > 2000) STATE.decisions = STATE.decisions.slice(0, 2000);
+  if (action === '승인') writeAuditLog('승인', detail, '§40 OK', '경영진');
   STATE.decisionStatus = action === '승인' ? 'approve' : action === '보류' ? 'hold' : 'review';
   renderLog();
   save();
@@ -7037,17 +7051,8 @@ function recordDecision(action) {
     STATE.complianceHistory.unshift(cmpResult);
     if (STATE.complianceHistory.length > 100) STATE.complianceHistory = STATE.complianceHistory.slice(0, 100);
 
-    // 2) 감사로그(decisions)에도 별도 항목으로 추가 기록 — 결재 직후 시점
+    // 2) 컴플라이언스 상세 결과는 이력 테이블에만 보관하고 감사 로그에는 승인 이벤트만 남김
     const cmpDetail = `${cmpResult.scenarioNum} ${cmpResult.scenarioName} · ${_fmtSignedWon(cmpResult.amt)}/kg · ${cmpResult.rounds}회 · OP ${_fmtSignedOku(cmpResult.opAnnualOku)} · 7대원칙 7/7 · 5위험 회피 5/5 · 주의표현 ${cmpResult.phraseFindings.length}건 · 경쟁사 데이터 0건`;
-    STATE.decisions.unshift({
-      time: cmpResult.timestamp,
-      user: '시스템 자동',
-      action: cmpResult.overall === 'PASS' ? '§40 점검' : '§40 검토',
-      detail: cmpDetail,
-      law: cmpResult.overall === 'PASS' ? '§40 PASS' : '§40 WARN',
-      actionClass: cmpResult.overall === 'PASS' ? 'pos' : 'warn'
-    });
-    if (STATE.decisions.length > 2000) STATE.decisions = STATE.decisions.slice(0, 2000);
 
     // 3) 컴플라이언스 페이지 이력 테이블이 열려있다면 즉시 갱신
     renderLog();
@@ -7117,28 +7122,16 @@ function writeAuditLog(action, detail, law = 'UI LOG', user = '시스템 기록'
     const safeAction = _dpdsCleanText(action);
     const safeDetail = _dpdsCleanText(detail);
 
-    // v42: 핵심 액션만 보관 (판가 결정·체크리스트·공정위 §40 대응 중심)
-    //      나머지 액션(메뉴 이동·접기/펼치기·차트 클릭·일반 UI 클릭)은 노이즈로 간주하여 저장 생략
-    const combined = `${safeAction} ${safeDetail} ${law}`.toLowerCase();
-    const KEEP_KEYWORDS = [
-      // 판가 의사결정 관련
-      '판가', '가격', '인상', '인하', '동결', '조정폭', '시나리오', '의사결정', '결재',
-      '승인', '거부', '보류', '회차', '축종별', 'mode 1', 'mode 2', 'mode 3', '최종안',
-      // 컴플라이언스·법무
-      '§40', '공정거래', '컴플라이언스', '체크리스트', '리스크 게이트', '준법',
-      '약탈가', 'cartel', '경쟁사', '법무',
-      // 데이터·검증
-      '업로드', '데이터 입력', '검증', '데이터 변경', '실적', '실행계획', '사업계획',
-      // 실행·통보
-      '실행', '거래처 통보', 'erp', '단가표', '다운로드',
-      // 가중치·정책
-      '프리셋', '가중치', '비연동', '연동', '필터', '환원율'
-    ];
-    const isKeyAction = KEEP_KEYWORDS.some(k => combined.includes(k));
-    if (!isKeyAction) {
-      // 핵심 키워드가 없으면 화면 표시용 interactionLog에만 기록하고 영구 로그(decisions)에서 제외
-      // → CSV/감사 보고 시 노이즈 제거
-    }
+    const allowedActions = new Set([
+      '데이터 업로드',
+      '자구노력 KPI 업로드',
+      '리스크 자가진단',
+      '판가 시나리오 선택',
+      '최종안 적용',
+      '승인',
+      '실행 체크리스트'
+    ]);
+    if (!allowedActions.has(safeAction)) return;
 
     if (!window.__dpdsRecentAuditKeys) window.__dpdsRecentAuditKeys = new Map();
     const key = `${safeAction}|${safeDetail}|${law}`;
@@ -7154,12 +7147,8 @@ function writeAuditLog(action, detail, law = 'UI LOG', user = '시스템 기록'
       law,
       actionClass: safeAction.includes('조정') || safeAction.includes('변경') ? 'warn' : 'info'
     };
-    // v42: decisions (영구 감사 로그) — 핵심 액션만 저장
-    if (isKeyAction) {
-      STATE.decisions.unshift(entry);
-      if (STATE.decisions.length > 2000) STATE.decisions = STATE.decisions.slice(0, 2000);
-    }
-    // interactionLog (UI 표시용 활동 로그) — 모두 저장하되 분량 제한
+    STATE.decisions.unshift(entry);
+    if (STATE.decisions.length > 2000) STATE.decisions = STATE.decisions.slice(0, 2000);
     STATE.interactionLog.unshift(entry);
     if (STATE.interactionLog.length > 500) STATE.interactionLog = STATE.interactionLog.slice(0, 500);
     renderLog();
@@ -7188,6 +7177,8 @@ function _dpdsDescribeClickTarget(target) {
   return { category, detail: `${view} · ${label}${meta.length ? ' · ' + meta.join(' · ') : ''}` };
 }
 function initInteractionLogger() {
+  // 지정된 업무 이벤트만 수동 기록한다. 전역 클릭/입력 자동 수집은 감사 로그 노이즈라 비활성화.
+  return;
   if (window.__dpdsInteractionLoggerReady) return;
   window.__dpdsInteractionLoggerReady = true;
   const inputTimers = new WeakMap();
@@ -7239,7 +7230,7 @@ function renderLog() {
   if (cnt) cnt.textContent = `${STATE.decisions.length} entries · 자동 저장`;
   if (!tbody) return;
   if (STATE.decisions.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:24px; color:var(--ink-3); font-size:12px;">아직 클릭·조정·의사결정 이력이 없습니다.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:24px; color:var(--ink-3); font-size:12px;">아직 지정 액션 로그가 없습니다.</td></tr>';
     return;
   }
   const colorMap = {
@@ -9641,7 +9632,7 @@ function setRoundIntervalRuleEnabled(enabled) {
 }
 
 function _getPricingGroupLevel() {
-  return STATE.pricingGroupLevel === 'mid' ? 'mid' : 'cat';
+  return 'cat';
 }
 
 function _getPricingGroups() {
@@ -9742,19 +9733,12 @@ function _getPricingGroupKeyForSku(sku) {
 function _renderPricingGroupLevelSwitch() {
   const el = document.getElementById('pricingGroupLevelSwitch');
   if (!el) return;
-  const level = _getPricingGroupLevel();
-  el.innerHTML = ['cat', 'mid'].map(v => {
-    const active = level === v;
-    const label = v === 'cat' ? '대분류' : '중분류';
-    const tip = v === 'cat'
-      ? '기존 방식입니다. 양계·양돈·축우·양어 단위로 조정합니다.'
-      : '업로드 데이터의 대분류|중분류 단위로 조정합니다. 중분류별 판매량으로 OP 영향을 계산합니다.';
-    return `<button class="btn${active ? ' gold' : ''}" style="font-size: 10.5px; padding: 4px 9px; flex:1;" onclick="setPricingGroupLevel('${v}')" data-tip="${tip}">${label}</button>`;
-  }).join('');
+  el.innerHTML = '';
+  el.style.display = 'none';
 }
 
 function setPricingGroupLevel(level) {
-  const next = level === 'mid' ? 'mid' : 'cat';
+  const next = 'cat';
   if (STATE.pricingGroupLevel === next) return;
   _saveCurrentPricingLevelAmounts();
   const prevAmounts = _clonePlain(STATE.catManualAmounts);
@@ -10656,24 +10640,12 @@ function handleTrackingUpload(event) {
       });
       if (STATE.trackingHistory.length > 60) STATE.trackingHistory = STATE.trackingHistory.slice(0, 60);
 
-      // 감사로그(decisions)에 자동 기록 — 5년 보관
-      const logDetail = `${file.name} · 실적 ${result.actualMonth}월 · 적용 ${result.appliedRounds}/${result.totalRounds}회차 · 진척률 ${result.progressRate}% · 실측 OP ${result.actualOpOku}억 · 예측정확도 ${result.accuracyPct}%`;
-      STATE.decisions.unshift({
-        time: fmt.date(),
-        user: '시스템 자동',
-        action: '진척률 기록',
-        detail: logDetail,
-        law: '§40 OK',
-        actionClass: result.status === 'complete' ? 'pos' : 'warn'
-      });
-      if (STATE.decisions.length > 2000) STATE.decisions = STATE.decisions.slice(0, 2000);
-
       // UI 갱신
       renderTrackingBaseline();
       renderTrackingProgress(result);
       renderTrackingHistory();
       renderLog();
-      showToast(`✓ 진척률 산출 완료 (${ms}ms) — 적용 ${result.appliedRounds}/${result.totalRounds}회차, 진척률 ${result.progressRate}%, 감사로그 기록`, 'success');
+      showToast(`✓ 진척률 산출 완료 (${ms}ms) — 적용 ${result.appliedRounds}/${result.totalRounds}회차, 진척률 ${result.progressRate}%`, 'success');
       save();
     } catch(err) {
       console.error('[Tracking Upload Error]', err);
@@ -11626,16 +11598,7 @@ function uploadTeamData(evt) {
           owner: data.teams[tid].owner || ''
         };
       });
-      // 감사로그 기록
-      STATE.decisions.unshift({
-        time: fmt.date(),
-        user: '시스템 자동',
-        action: '팀데이터',
-        detail: `JSON 업로드 — ${Object.keys(data.teams).length}개 부서 데이터 갱신 (금지어 검사 통과)`,
-        law: '§40 OK',
-        actionClass: 'pos'
-      });
-      if (STATE.decisions.length > 2000) STATE.decisions = STATE.decisions.slice(0, 2000);
+      writeAuditLog('자구노력 KPI 업로드', `${file.name} · ${Object.keys(data.teams).length}개 부서 데이터 갱신 (금지어 검사 통과)`, '§40 OK', '시스템 자동');
       save();
       renderTeamData();
       renderLog();
@@ -11754,6 +11717,9 @@ function renderExecChecklist() {
 /* === 실행 체크리스트 토글 === */
 function toggleExecCheck(id) {
   STATE.execChecks[id] = !STATE.execChecks[id];
+  const item = document.querySelector(`#execChecklist .check-item[data-id="${id}"]`);
+  const label = item?.querySelector('.check-text')?.textContent?.trim() || item?.textContent?.trim() || id;
+  writeAuditLog('실행 체크리스트', `${label} · ${STATE.execChecks[id] ? '체크' : '해제'}`, 'AUTO SAVE', '사용자 조작');
   renderExecChecklist();
   save();
 }
