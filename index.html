@@ -3916,6 +3916,7 @@ body[data-width="full"]     { --content-max: none; }
           <div data-tip="MODE 3: 회차별 분할 일정. ▸ 사내 룰: 회차당 ≤20원/kg, 회차 간격 ≥2개월, 큰 금액 먼저. ▸ 데이터 업로드 시 1차는 자동으로 실적월+2부터 시작 (예: 4월 실적이면 6월 1차). ▸ 회차 금액 변경 시 MODE 2가 비례 스케일링됩니다." style="background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 14px;">
             <div style="font-family: var(--font-mono); font-size: 10px; color: var(--gold); letter-spacing: .12em; margin-bottom: 8px;">MODE 3 · 회차 정책</div>
             <h4 style="font-family: var(--font-display); font-size: 13px; font-weight: 600; margin: 0 0 10px;" id="ruleStatusSub">자동 산출 (룰 준수)</h4>
+            <div id="roundIntervalRuleSwitch" style="display:flex; gap:4px; margin: 0 0 8px;"></div>
             <div id="mode3ScheduleCatTabs" style="display: flex; gap: 5px; flex-wrap: wrap; margin: 0 0 8px;"></div>
 
             <!-- 자동 산출 표시 -->
@@ -3929,7 +3930,7 @@ body[data-width="full"]     { --content-max: none; }
 
             <!-- 수기 편집 표시 -->
             <div id="manualScheduleBlock" style="border-top: 1px dashed var(--line); padding-top: 8px;">
-              <div style="font-size: 10px; color: var(--ink-3); letter-spacing: .08em; margin-bottom: 4px; font-family: var(--font-mono);">MANUAL · 수기 조정 <span style="font-size:9px; color:var(--ink-3);">(전체 탭 전용)</span></div>
+              <div style="font-size: 10px; color: var(--ink-3); letter-spacing: .08em; margin-bottom: 4px; font-family: var(--font-mono);">MANUAL · 수기 조정 <span id="manualScheduleScopeLabel" style="font-size:9px; color:var(--ink-3);">(선택 탭)</span></div>
               <div id="manualScheduleEditor" style="display: flex; flex-direction: column; gap: 4px; margin-bottom: 6px;">
                 <!-- JS 렌더링 -->
               </div>
@@ -5255,11 +5256,20 @@ function _getMaxPerRound(cat) {
   return PRICING_RULES.MAX_PER_ROUND;
 }
 
-/* === 회차별 시점 산출 (1차 startMonth, +2개월 간격) === */
+function _isRoundIntervalRuleEnabled() {
+  return !(typeof STATE !== 'undefined' && STATE.roundIntervalRuleEnabled === false);
+}
+
+function _getRoundIntervalMonths() {
+  return _isRoundIntervalRuleEnabled() ? PRICING_RULES.ROUND_INTERVAL : 1;
+}
+
+/* === 회차별 시점 산출 (1차 startMonth, 기본 +2개월 / 룰 OFF 시 +1개월) === */
 function buildScheduleMonths(startMonth, rounds) {
   const months = [];
+  const interval = _getRoundIntervalMonths();
   for (let i = 0; i < rounds; i++) {
-    months.push(startMonth + i * PRICING_RULES.ROUND_INTERVAL);
+    months.push(startMonth + i * interval);
   }
   return months;
 }
@@ -5403,6 +5413,7 @@ let STATE = {
   churnHistoryOption: { enabled: false, rows: [], uploadedAt: null }, // 거래처 이탈 고도화 옵션
   manualSchedule: null,          // 전체 탭 전용 수기 입력 회차 일정 [{round:1, month:5, amt:20}, {round:2, month:7, amt:10}]
   catSchedules: {},              // 축종별 MODE 3 직접 조정 일정 {양돈:[{round,month,amt}], ...}
+  roundIntervalRuleEnabled: true, // MODE 3 회차 간격 룰: true=2개월 간격, false=매월 순차/간격 경고 없음
   finalMonthlyCat: '전체',       // 최종 월별 OP 그래프 축종 탭 선택값
   mode3ScheduleCat: '전체',      // MODE 3 자동 산출 축종 탭 선택값
   guidelineActiveDoc: null,      // 운영 지침 doc1/doc2/doc3 탭 선택값 (선택 전 비노출)
@@ -5452,6 +5463,7 @@ function restore() {
   if (!STATE.catSchedules || typeof STATE.catSchedules !== 'object' || Array.isArray(STATE.catSchedules)) STATE.catSchedules = {};
   if (!STATE.catNoIncrease || typeof STATE.catNoIncrease !== 'object' || Array.isArray(STATE.catNoIncrease)) STATE.catNoIncrease = {};
   if (STATE.pricingGroupLevel !== 'mid') STATE.pricingGroupLevel = 'cat';
+  if (typeof STATE.roundIntervalRuleEnabled !== 'boolean') STATE.roundIntervalRuleEnabled = true;
   if (!STATE.churnHistoryOption || typeof STATE.churnHistoryOption !== 'object') STATE.churnHistoryOption = { enabled: false, rows: [], uploadedAt: null };
   if (!Array.isArray(STATE.churnHistoryOption.rows)) STATE.churnHistoryOption.rows = [];
   // v32: 비연동 제품 필터 (true 시 연동제="Y"/"O"/"연동" 행 제외, 비연동 제품에만 인상·인하 적용)
@@ -5880,7 +5892,7 @@ function compute() {
   });
   for (let i = 1; i < scheduleMonths.length; i++) {
     const gap = scheduleMonths[i] - scheduleMonths[i-1];
-    if (gap < PRICING_RULES.ROUND_INTERVAL) ruleViolations.push(`${i+1}차 시점 ${gap}개월 간격 (룰 ${PRICING_RULES.ROUND_INTERVAL}개월 미달)`);
+    if (_isRoundIntervalRuleEnabled() && gap < PRICING_RULES.ROUND_INTERVAL) ruleViolations.push(`${i+1}차 시점 ${gap}개월 간격 (룰 ${PRICING_RULES.ROUND_INTERVAL}개월 미달)`);
   }
 
   const efficiency = rounds > 0 ? amt / rounds : amt;
@@ -8750,7 +8762,7 @@ function _syncFromMode2ToMode13() {
       const startM = STATE.manualSchedule[0]?.month || dataFloor;
       STATE.manualSchedule = autoSplit.map((a, i) => ({
         round: i+1, amt: a,
-        month: Math.min(12, startM + i * PRICING_RULES.ROUND_INTERVAL)
+        month: Math.min(12, startM + i * _getRoundIntervalMonths())
       }));
     }
   }
@@ -8942,17 +8954,24 @@ function renderRoundSchedulePolicy() {
   const autoEl = document.getElementById('autoScheduleDisplay');
   const manualEl = document.getElementById('manualScheduleEditor');
   const manualBlock = document.getElementById('manualScheduleBlock');
+  const manualScopeLabel = document.getElementById('manualScheduleScopeLabel');
   const sub = document.getElementById('ruleStatusSub');
   const violationsEl = document.getElementById('manualScheduleViolations');
   const tabsEl = document.getElementById('mode3ScheduleCatTabs');
   const finalCats = _getFinalCatAmounts(r);
   const selectedCat = _sanitizeDpdsCat(STATE.mode3ScheduleCat);
   STATE.mode3ScheduleCat = selectedCat;
+  _renderRoundIntervalRuleSwitch();
   if (tabsEl) _renderFinalCatTabs('mode3ScheduleCatTabs', selectedCat, 'setMode3ScheduleCat');
 
-  // 전체 탭에서는 하단 MANUAL 편집기만 조정 가능. 축종 탭에서는 상단 월/조정폭 입력으로 직접 조정.
+  // 선택된 탭(전체/대분류/중분류) 기준으로 하단 MANUAL 편집기를 항상 제공.
   if (manualBlock) {
-    manualBlock.classList.toggle('mode3-hidden', selectedCat !== '전체');
+    manualBlock.classList.remove('mode3-hidden');
+  }
+  if (manualScopeLabel) {
+    manualScopeLabel.textContent = selectedCat === '전체'
+      ? '(전체 평균 편집)'
+      : `(${_getPricingGroupLabel(selectedCat, _getPricingGroupLevel() === 'mid')} 편집)`;
   }
 
   if (autoEl) {
@@ -8969,30 +8988,24 @@ function renderRoundSchedulePolicy() {
       const rows = schedule.rows || schedule.scheduleAmounts.map((a, i) => ({ round: i + 1, month: schedule.scheduleMonths[i], amt: a }));
       const sum = rows.reduce((s, v) => s + (Number(v.amt) || 0), 0);
       autoEl.innerHTML = rows.map((s, i) => `
-        <div class="mode3-cat-edit-row" style="display: grid; grid-template-columns: 46px minmax(110px, 1fr) 64px 72px; gap: 8px; align-items: center; padding: 6px 10px; background: var(--surface); border-radius: 5px; border: 1px solid var(--line);">
+        <div class="mode3-cat-edit-row" style="display: grid; grid-template-columns: 46px minmax(110px, 1fr) 60px 70px; gap: 8px; align-items: center; padding: 6px 10px; background: var(--surface); border-radius: 5px; border: 1px solid var(--line);">
           <span style="font-family: var(--font-mono); font-size: 11px; color: var(--gold); font-weight: 700;">${i+1}차</span>
-          <span style="font-size: 12px; color: var(--ink-2);">${baseLabel} · 직접 조정</span>
-          <input class="mode3-cat-input" type="number" min="1" max="12" step="1" value="${s.month}" title="적용 월"
-            oninput="updateCatScheduleField('${selectedCat}', ${i}, 'month', this.value)">
-          <input class="mode3-cat-input" type="number" min="${_getParentCatFromGroupKey(selectedCat) === '양어' ? -PRICING_RULES.MAX_PER_ROUND_FISH_CAP : -PRICING_RULES.MAX_PER_ROUND_CAP}" max="${_getParentCatFromGroupKey(selectedCat) === '양어' ? PRICING_RULES.MAX_PER_ROUND_FISH_CAP : PRICING_RULES.MAX_PER_ROUND_CAP}" step="0.5" value="${_fmtWon(s.amt)}" title="조정폭(원/kg)"
-            oninput="updateCatScheduleField('${selectedCat}', ${i}, 'amt', this.value)">
+          <span style="font-size: 12px; color: var(--ink-2);">${baseLabel} · 수기 편집값</span>
+          <span style="font-family: var(--font-mono); font-size: 12px; color: var(--ink-2); text-align: right;">${s.month}월</span>
+          <span style="font-family: var(--font-mono); font-size: 13px; color: var(--gold); font-weight: 700; text-align: right;">${_fmtSignedWon(s.amt)}</span>
         </div>
       `).join('') + `
-        <div style="display: grid; grid-template-columns: 46px minmax(110px, 1fr) 64px 72px; gap: 8px; align-items: center; padding: 6px 10px; background: var(--gold-bg, #fef9e8); border-radius: 5px; margin-top: 4px; border: 1px dashed var(--gold);">
+        <div style="display: grid; grid-template-columns: 46px minmax(110px, 1fr) 60px 70px; gap: 8px; align-items: center; padding: 6px 10px; background: var(--gold-bg, #fef9e8); border-radius: 5px; margin-top: 4px; border: 1px dashed var(--gold);">
           <span style="font-size: 11px; color: var(--ink-3); font-weight: 600;">합계</span>
-          <span style="font-size: 11px; color: var(--ink-3);">${baseLabel} · 상단 입력값으로 손익 즉시 반영</span>
+          <span style="font-size: 11px; color: var(--ink-3);">${baseLabel} · 하단 MANUAL 입력값으로 손익 즉시 반영</span>
           <span style="text-align:right; font-family: var(--font-mono); font-size: 11px; color: var(--ink-3);">${rows.length}회</span>
           <span style="font-family: var(--font-mono); font-size: 13px; color: var(--ink); font-weight: 700; text-align: right;">${_fmtSignedWon(sum)}</span>
-        </div>
-        <div style="display:flex; justify-content:space-between; align-items:center; gap:6px; margin-top:5px; font-size:10.5px; color:var(--ink-3);">
-          <span>※ 축종 탭에서는 하단 MANUAL을 잠그고, 위 월·조정폭 입력으로 해당 축종만 조정합니다.</span>
-          <button class="btn" style="font-size:10px; padding:3px 7px;" onclick="resetCatSchedule('${selectedCat}')">↺ 축종 룰</button>
         </div>`;
     } else {
       autoEl.innerHTML = schedule.scheduleAmounts.map((a, i) => `
         <div style="display: grid; grid-template-columns: 50px 1fr 60px 70px; gap: 8px; align-items: center; padding: 6px 10px; background: var(--surface); border-radius: 5px; border: 1px solid var(--line);">
           <span style="font-family: var(--font-mono); font-size: 11px; color: var(--gold); font-weight: 700;">${i+1}차</span>
-          <span style="font-size: 12px; color: var(--ink-2);">${baseLabel} · ${i === 0 ? '최초 적용' : `${i+1}차 (1차 +${i*PRICING_RULES.ROUND_INTERVAL}개월)`}</span>
+          <span style="font-size: 12px; color: var(--ink-2);">${baseLabel} · ${i === 0 ? '최초 적용' : `${i+1}차 (1차 +${i*_getRoundIntervalMonths()}개월)`}</span>
           <span style="font-family: var(--font-mono); font-size: 12px; color: var(--ink-2); text-align: right;">${schedule.scheduleMonths[i]}월</span>
           <span style="font-family: var(--font-mono); font-size: 13px; color: var(--gold); font-weight: 700; text-align: right;">${_fmtSignedWon(a)}</span>
         </div>
@@ -9012,34 +9025,36 @@ function renderRoundSchedulePolicy() {
   _renderMode3CatOpSummary(finalCats, r);
 
   if (manualEl) {
-    if (selectedCat !== '전체') {
-      manualEl.innerHTML = '';
-    } else {
-      // 수기 편집기 — 전체 평균 회차 일정 편집 (금액 변경 시 MODE 2/1로 비례 동기화)
-      const schedule = _getScheduleForFinal('전체');
-      const editing = schedule.rows || [];
-      manualEl.innerHTML = editing.map((s, i) => `
-        <div style="display: grid; grid-template-columns: 38px 80px 80px 28px; gap: 6px; align-items: center;">
-          <span style="font-family: var(--font-mono); font-size: 11px; color: var(--gold); font-weight: 700;">${s.round || (i+1)}차</span>
-          <input type="number" min="1" max="12" step="1" value="${s.month}" data-idx="${i}" data-field="month"
-            style="padding: 5px 8px; border: 1px solid var(--line-2); border-radius: 4px; font-family: var(--font-mono); font-size: 12px; text-align: right; background: var(--surface); color: var(--ink); width: 100%;"
-            oninput="updateManualScheduleField(${i}, 'month', this.value)">
-          <input type="number" min="-100" max="100" step="0.5" value="${s.amt}" data-idx="${i}" data-field="amt"
-            style="padding: 5px 8px; border: 1px solid var(--line-2); border-radius: 4px; font-family: var(--font-mono); font-size: 12px; text-align: right; background: var(--surface); color: var(--ink); width: 100%;"
-            oninput="updateManualScheduleField(${i}, 'amt', this.value)">
-          ${editing.length > 1 ? `<button onclick="removeManualRound(${i})" data-tip="이 회차 삭제" style="background: transparent; border: 1px solid var(--line-2); color: var(--ink-3); border-radius: 4px; cursor: pointer; padding: 4px 6px; font-size: 11px;">×</button>` : '<span></span>'}
+    const schedule = _getScheduleForFinal(selectedCat);
+    const editing = schedule.rows || [];
+    const amtCap = selectedCat === '전체' ? 100 : (_getParentCatFromGroupKey(selectedCat) === '양어' ? PRICING_RULES.MAX_PER_ROUND_FISH_CAP : PRICING_RULES.MAX_PER_ROUND_CAP);
+    const monthHandler = selectedCat === '전체'
+      ? (i) => `updateManualScheduleField(${i}, 'month', this.value)`
+      : (i) => `updateCatScheduleField('${selectedCat}', ${i}, 'month', this.value)`;
+    const amtHandler = selectedCat === '전체'
+      ? (i) => `updateManualScheduleField(${i}, 'amt', this.value)`
+      : (i) => `updateCatScheduleField('${selectedCat}', ${i}, 'amt', this.value)`;
+    manualEl.innerHTML = editing.map((s, i) => `
+      <div style="display: grid; grid-template-columns: 38px 80px 80px 28px; gap: 6px; align-items: center;">
+        <span style="font-family: var(--font-mono); font-size: 11px; color: var(--gold); font-weight: 700;">${s.round || (i+1)}차</span>
+        <input type="number" min="1" max="12" step="1" value="${s.month}" data-idx="${i}" data-field="month"
+          style="padding: 5px 8px; border: 1px solid var(--line-2); border-radius: 4px; font-family: var(--font-mono); font-size: 12px; text-align: right; background: var(--surface); color: var(--ink); width: 100%;"
+          oninput="${monthHandler(i)}">
+        <input type="number" min="${-amtCap}" max="${amtCap}" step="0.5" value="${s.amt}" data-idx="${i}" data-field="amt"
+          style="padding: 5px 8px; border: 1px solid var(--line-2); border-radius: 4px; font-family: var(--font-mono); font-size: 12px; text-align: right; background: var(--surface); color: var(--ink); width: 100%;"
+          oninput="${amtHandler(i)}">
+        ${editing.length > 1 ? `<button onclick="removeManualRound(${i})" data-tip="이 회차 삭제" style="background: transparent; border: 1px solid var(--line-2); color: var(--ink-3); border-radius: 4px; cursor: pointer; padding: 4px 6px; font-size: 11px;">×</button>` : '<span></span>'}
+      </div>
+    `).join('');
+    if (editing.length > 0) {
+      manualEl.innerHTML = `
+        <div style="display: grid; grid-template-columns: 38px 80px 80px 28px; gap: 6px; font-size: 10px; color: var(--ink-3); padding: 0 2px;">
+          <span></span>
+          <span style="text-align: right;">월</span>
+          <span style="text-align: right;">금액(원)</span>
+          <span></span>
         </div>
-      `).join('');
-      if (editing.length > 0) {
-        manualEl.innerHTML = `
-          <div style="display: grid; grid-template-columns: 38px 80px 80px 28px; gap: 6px; font-size: 10px; color: var(--ink-3); padding: 0 2px;">
-            <span></span>
-            <span style="text-align: right;">월</span>
-            <span style="text-align: right;">금액(원)</span>
-            <span></span>
-          </div>
-        ` + manualEl.innerHTML;
-      }
+      ` + manualEl.innerHTML;
     }
   }
 
@@ -9053,7 +9068,7 @@ function renderRoundSchedulePolicy() {
     });
     for (let i = 1; i < sch.scheduleMonths.length; i++) {
       const gap = sch.scheduleMonths[i] - sch.scheduleMonths[i-1];
-      if (gap < PRICING_RULES.ROUND_INTERVAL) violations.push(`${selectedCat} ${i+1}차 시점 ${gap}개월 간격 (룰 ${PRICING_RULES.ROUND_INTERVAL}개월 미달)`);
+      if (_isRoundIntervalRuleEnabled() && gap < PRICING_RULES.ROUND_INTERVAL) violations.push(`${selectedCat} ${i+1}차 시점 ${gap}개월 간격 (룰 ${PRICING_RULES.ROUND_INTERVAL}개월 미달)`);
     }
     if (violations.length > 0) {
       violationsEl.innerHTML = `⚠ <strong>룰 위반:</strong> ${violations.join(' · ')}`;
@@ -9171,6 +9186,25 @@ function updateManualScheduleField(idx, field, value) {
 }
 
 function addManualRound() {
+  const selectedCat = _sanitizeDpdsCat(STATE.mode3ScheduleCat);
+  if (selectedCat !== '전체') {
+    const rows = _ensureCatScheduleRows(selectedCat);
+    const last = rows[rows.length - 1];
+    const r = compute();
+    const dataFloor = (DATA.loaded && DATA.currentMonth > 0) ? DATA.currentMonth + 2 : _getMode3StartMonth(r);
+    rows.push({
+      round: rows.length + 1,
+      month: Math.min(12, (last?.month || dataFloor) + _getRoundIntervalMonths()),
+      amt: 0
+    });
+    STATE.catSchedules[selectedCat] = rows;
+    writeAuditLog('단위별 회차 정책 조정', `MODE 3 ${_getPricingGroupLabel(selectedCat, true)} ${rows.length}차 추가 · ${rows[rows.length - 1].month}월 0원/kg`, 'AUTO SAVE', '사용자 조작');
+    renderRoundSchedulePolicy();
+    _renderFinalCharts();
+    renderDecisionCharts();
+    save();
+    return;
+  }
   const r = compute();
   if (!STATE.manualSchedule) {
     STATE.manualSchedule = r.scheduleAmounts.map((a, i) => ({ round: i+1, month: r.scheduleMonths[i], amt: a }));
@@ -9179,7 +9213,7 @@ function addManualRound() {
   const dataFloor = (DATA.loaded && DATA.currentMonth > 0) ? DATA.currentMonth + 2 : 5;
   STATE.manualSchedule.push({
     round: STATE.manualSchedule.length + 1,
-    month: Math.min(12, (last?.month || dataFloor) + PRICING_RULES.ROUND_INTERVAL),
+    month: Math.min(12, (last?.month || dataFloor) + _getRoundIntervalMonths()),
     amt: (r.amt < 0 ? -5 : 5)
   });
   writeAuditLog('회차 정책 조정', `MODE 3 ${STATE.manualSchedule.length}차 추가 · ${STATE.manualSchedule[STATE.manualSchedule.length - 1].month}월 ${_fmtSignedWon(STATE.manualSchedule[STATE.manualSchedule.length - 1].amt)}/kg`, 'AUTO SAVE', '사용자 조작');
@@ -9190,6 +9224,30 @@ function addManualRound() {
 }
 
 function removeManualRound(idx) {
+  const selectedCat = _sanitizeDpdsCat(STATE.mode3ScheduleCat);
+  if (selectedCat !== '전체') {
+    const rows = _ensureCatScheduleRows(selectedCat);
+    if (!rows || rows.length <= 1) return;
+    const removedRound = rows[idx];
+    rows.splice(idx, 1);
+    rows.forEach((s, i) => s.round = i + 1);
+    STATE.catSchedules[selectedCat] = rows;
+    const totalAmt = Math.round(rows.reduce((s, x) => s + (Number(x.amt) || 0), 0) * 10) / 10;
+    if (!STATE.catManualAmounts) {
+      const r = compute();
+      STATE.catManualAmounts = _getCatRecommendedAmounts(r.amt);
+    }
+    STATE.catManualAmounts[selectedCat] = totalAmt;
+    writeAuditLog('단위별 회차 정책 조정', `MODE 3 ${_getPricingGroupLabel(selectedCat, true)} ${idx + 1}차 삭제 · ${removedRound?.month || '—'}월 ${_fmtSignedWon(removedRound?.amt || 0)}/kg`, 'AUTO SAVE', '사용자 조작');
+    renderManualCatInputs();
+    _updateMode1Display();
+    recalcManualOpEstimate();
+    renderRoundSchedulePolicy();
+    _renderFinalCharts();
+    renderDecisionCharts();
+    save();
+    return;
+  }
   if (!STATE.manualSchedule || STATE.manualSchedule.length <= 1) return;
   const removedRound = STATE.manualSchedule[idx];
   STATE.manualSchedule.splice(idx, 1);
@@ -9203,6 +9261,12 @@ function removeManualRound(idx) {
 }
 
 function resetManualSchedule() {
+  const selectedCat = _sanitizeDpdsCat(STATE.mode3ScheduleCat);
+  if (selectedCat !== '전체') {
+    resetCatSchedule(selectedCat);
+    showToast('선택 단위 자동 룰 산출값으로 복원 완료', 'success');
+    return;
+  }
   STATE.manualSchedule = null;
   writeAuditLog('회차 정책 조정', 'MODE 3 자동 룰 산출값으로 복원', 'AUTO SAVE', '사용자 조작');
   // 룰 복원 시 MODE 2 → MODE 3 자동 룰 재산출 (catManualAmounts는 유지)
@@ -9382,6 +9446,31 @@ function _signedCssColorLiteral(v, pos = '#8B1538', neg = '#1d4ed8', zero = '#64
 
 function _getDpdsCats() {
   return (typeof CATS !== 'undefined' && Array.isArray(CATS)) ? CATS : ['양계', '양돈', '축우', '양어'];
+}
+
+function _renderRoundIntervalRuleSwitch() {
+  const el = document.getElementById('roundIntervalRuleSwitch');
+  if (!el) return;
+  const on = _isRoundIntervalRuleEnabled();
+  el.innerHTML = `
+    <button class="btn${on ? ' gold' : ''}" style="font-size:10.5px; padding:4px 8px; flex:1;" onclick="setRoundIntervalRuleEnabled(true)" data-tip="기존 방식입니다. 2차 이후 회차는 이전 회차에서 최소 2개월 뒤로 자동 배치되고, 수기 입력도 2개월 미만이면 경고합니다.">2개월 룰 ON</button>
+    <button class="btn${!on ? ' gold' : ''}" style="font-size:10.5px; padding:4px 8px; flex:1;" onclick="setRoundIntervalRuleEnabled(false)" data-tip="회차 간격 제한을 끕니다. 자동 산출은 매월 순차 적용(+1개월)으로 잡고, 수기 일정의 2개월 미만 경고를 표시하지 않습니다.">OFF</button>
+  `;
+}
+
+function setRoundIntervalRuleEnabled(enabled) {
+  const next = !!enabled;
+  if (_isRoundIntervalRuleEnabled() === next) return;
+  STATE.roundIntervalRuleEnabled = next;
+  STATE.manualSchedule = null;
+  STATE.catSchedules = {};
+  renderRoundSchedulePolicy();
+  _renderFinalCharts();
+  renderDecisionCharts();
+  if (typeof renderScenarioChart === 'function') { try { renderScenarioChart(); } catch(e) {} }
+  writeAuditLog('회차 간격 룰 변경', `MODE 3 2개월 룰 ${next ? 'ON' : 'OFF'} · 자동 회차 재산출`, 'AUTO SAVE', '사용자 조작');
+  showToast(`2개월 룰 ${next ? 'ON' : 'OFF'} — 회차 자동 재산출`, 'success');
+  save();
 }
 
 function _getPricingGroupLevel() {
