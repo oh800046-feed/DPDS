@@ -9980,16 +9980,19 @@ function _getScheduleForFinal(cat = '전체') {
     };
   }
 
-  // 전체 탭: 하단 MANUAL 편집기가 만든 전체 일정만 사용. 축종별 조정은 전체 평균 OP 산출 시 별도 합산된다.
+  // 전체 탭: 수기 일정이 없으면 MODE 2 최종 축종별 조정폭의 물량 가중평균으로 자동 분할한다.
+  // 이렇게 해야 MODE 2에서 축종별 금액을 바꿀 때 MODE 3 전체 평균도 함께 움직인다.
+  const finalCats = _getFinalCatAmounts(r);
+  const weightedAvg = _avgFromCatAmounts(finalCats);
   const rows = STATE.manualSchedule
     ? _normalizeScheduleRows(STATE.manualSchedule, cat, true)
-    : (r.scheduleAmounts || []).map((a, i) => ({ round: i + 1, month: r.scheduleMonths[i], amt: a }));
+    : _buildScheduleRowsForAmount(weightedAvg, _getMode3StartMonth(r), cat);
   return {
     r,
     scheduleAmounts: rows.map(s => s.amt || 0),
     scheduleMonths: rows.map(s => s.month),
     rows,
-    source: STATE.manualSchedule ? 'overall-manual' : 'overall-auto'
+    source: STATE.manualSchedule ? 'overall-manual' : 'overall-weighted-auto'
   };
 }
 
