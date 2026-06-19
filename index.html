@@ -9091,7 +9091,7 @@ function _ensureCatScheduleRows(cat) {
   cat = _sanitizeDpdsCat(cat);
   if (cat === '전체') return [];
   if (!STATE.catSchedules || typeof STATE.catSchedules !== 'object' || Array.isArray(STATE.catSchedules)) STATE.catSchedules = {};
-  const existing = _normalizeScheduleRows(STATE.catSchedules[cat], cat);
+  const existing = _normalizeScheduleRows(STATE.catSchedules[cat], cat, true);
   if (existing.length > 0) {
     STATE.catSchedules[cat] = existing;
     return existing;
@@ -9702,7 +9702,7 @@ function _getMode3StartMonth(r) {
     : ((DATA.loaded && DATA.currentMonth > 0) ? Math.min(12, DATA.currentMonth + 2) : 5);
 }
 
-function _normalizeScheduleRows(rows, cat) {
+function _normalizeScheduleRows(rows, cat, keepZeroRows = false) {
   // 축종별 회차당 상한: 양어 500, 일반 100 (clamp 한도도 축종에 맞춰 적용)
   const parentCat = _getParentCatFromGroupKey(cat);
   const cap = (parentCat === '양어') ? PRICING_RULES.MAX_PER_ROUND_FISH_CAP : PRICING_RULES.MAX_PER_ROUND_CAP;
@@ -9712,7 +9712,7 @@ function _normalizeScheduleRows(rows, cat) {
       month: Math.max(1, Math.min(12, parseInt(s.month, 10) || 1)),
       amt: Math.max(-cap, Math.min(cap, Math.round((parseFloat(s.amt) || 0) * 10) / 10))
     }))
-    .filter(s => Math.abs(s.amt) > 0.0001);
+    .filter(s => keepZeroRows || Math.abs(s.amt) > 0.0001);
 }
 
 function _buildScheduleRowsForAmount(amount, startMonth, cat) {
@@ -9727,7 +9727,7 @@ function _getScheduleForFinal(cat = '전체') {
 
   // 축종 탭: 축종별 직접 조정값이 있으면 우선 사용. 없으면 해당 축종 최종 조정폭을 룰로 자동 분할.
   if (cat !== '전체') {
-    const saved = _normalizeScheduleRows(STATE.catSchedules?.[cat], cat);
+    const saved = _normalizeScheduleRows(STATE.catSchedules?.[cat], cat, true);
     if (saved.length > 0) {
       return {
         r,
@@ -9751,7 +9751,7 @@ function _getScheduleForFinal(cat = '전체') {
 
   // 전체 탭: 하단 MANUAL 편집기가 만든 전체 일정만 사용. 축종별 조정은 전체 평균 OP 산출 시 별도 합산된다.
   const rows = STATE.manualSchedule
-    ? _normalizeScheduleRows(STATE.manualSchedule)
+    ? _normalizeScheduleRows(STATE.manualSchedule, cat, true)
     : (r.scheduleAmounts || []).map((a, i) => ({ round: i + 1, month: r.scheduleMonths[i], amt: a }));
   return {
     r,
