@@ -3366,7 +3366,7 @@ body[data-width="full"]     { --content-max: none; }
           <div data-tip="Net Long = Long − Short. 양수면 시장 전체가 상승 전망 우세" style="margin-top: 8px; padding: 10px; background: var(--gold-bg, #fefcf6); border: 1px solid var(--gold); border-radius: 5px;">
             <div style="font-family: var(--font-mono); font-size: 9px; color: var(--gold); letter-spacing: .1em; margin-bottom: 2px;">NET LONG</div>
             <div id="cotNetVal" style="font-family: var(--font-display); font-size: 16px; font-weight: 700; color: var(--gold);">+166,780 계약</div>
-            <div id="cotSummary" style="font-size: 10.5px; color: var(--ink-2); margin-top: 2px;"><strong>종합 전망: 옥수수 가격 상승</strong> · ⚠ 5월 인상 근거 강화</div>
+            <div id="cotSummary" style="font-size: 10.5px; color: var(--ink-2); margin-top: 2px;"><strong>종합 전망: 옥수수 가격 상승</strong> · ⚠ 8월 인상 근거 강화</div>
           </div>
         </div>
 
@@ -3539,6 +3539,21 @@ body[data-width="full"]     { --content-max: none; }
         <strong style="color: var(--accent);">📊 시나리오 산출 기준</strong> — <span id="scenarioBasisText">현황 진단에서 실적·전망 데이터를 업로드하면, 그 목표 OP·전망 OP를 기준으로 1안 80% · 2안 90% · 3안 100% 달성에 필요한 조정폭을 자동 역산합니다.</span>
       </div>
 
+      <style>
+        /* index(3) display trim: hide requested scenario/impact summary areas only. */
+        #view-scenario .scen-metrics,
+        #view-scenario .scen-foot,
+        #scenarioBannerTitle,
+        #scenarioBannerKpi,
+        #boardScenarioNum,
+        #boardReco,
+        #boardRecoSub,
+        #boardRecoAvg,
+        .index3-hidden-section {
+          display: none !important;
+        }
+      </style>
+
       <div class="scen-grid">
         <div class="scen-card" onclick="selectScenario(1)">
           <div class="scen-tag">CONSERVATIVE</div>
@@ -3584,7 +3599,7 @@ body[data-width="full"]     { --content-max: none; }
         </div>
       </div>
 
-      <div class="card" style="margin-top: 16px;">
+      <div class="card index3-hidden-section" style="margin-top: 16px;">
         <div class="h">
           <h3>시나리오별 핵심 지표 비교 <span class="help-i" data-tip="3개 시나리오 × 4가지 핵심 지표 (회당 효율 · 연간 OP · 이탈률 · Spread Gap). Spread Gap = 사업계획 단가 가정(원/kg) − 시나리오 단가(원/kg). 양수=부족, 0=달성, 음수=초과">?</span></h3>
           <span class="sub">3 SCENARIOS × 4 KPIs · Spread Gap 포함</span>
@@ -3785,7 +3800,7 @@ body[data-width="full"]     { --content-max: none; }
         <div class="grid-3" id="axisGrid"></div>
       </div>
 
-      <div class="card">
+      <div class="card index3-hidden-section">
         <div class="h">
           <h3>실시간 영향도 (Impact)</h3>
           <span class="sub">RECALCULATED</span>
@@ -3804,7 +3819,7 @@ body[data-width="full"]     { --content-max: none; }
           <div class="stat" id="kpiRoundsCard">
             <div class="lbl">회당 효율 (핵심)</div>
             <div class="val" id="kpiEff">18.0<span class="unit">원/회</span></div>
-            <div class="delta up" id="kpiEffD">1회 (5월)</div>
+            <div class="delta up" id="kpiEffD">1회 (8월)</div>
           </div>
           <div class="stat">
             <div class="lbl">거래처 이탈</div>
@@ -3817,7 +3832,7 @@ body[data-width="full"]     { --content-max: none; }
       <div class="grid-2">
         <div class="card">
           <div class="h">
-            <h3>월별 OP 추이 — Plan / Outlook / 경영진 의사결정안 <span class="help-i" data-tip="3개 라인 비교: ① Plan(목표·점선) ② Raw Outlook(현 전망·연한선) ③ 경영진 의사결정안(슬라이더+수기 입력 반영·강조선). 인상 시작월(4-5월)부터 의사결정안이 Outlook 대비 상승">?</span></h3>
+            <h3>월별 OP 추이 — Plan / Outlook / 경영진 의사결정안 <span class="help-i" data-tip="3개 라인 비교: ① Plan(목표·점선) ② Raw Outlook(현 전망·연한선) ③ 경영진 의사결정안(슬라이더+수기 입력 반영·강조선). 인상 시작월(8월)부터 의사결정안이 Outlook 대비 상승">?</span></h3>
             <span class="sub" id="chartMonthlySub">3-LINE COMPARISON</span>
           </div>
           <div class="chart-wrap"><canvas id="chartMonthly"></canvas></div>
@@ -3850,7 +3865,7 @@ body[data-width="full"]     { --content-max: none; }
         <div id="scenarioBanner" style="background: linear-gradient(90deg, #1e293b 0%, #334155 100%); color: #fff; border-radius: 6px; padding: 12px 16px; margin-bottom: 14px; display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap;">
           <div>
             <div style="font-family: var(--font-mono); font-size: 10px; color: var(--gold); letter-spacing: .12em; margin-bottom: 3px;">SELECTED SCENARIO · 5축 가중치 자동 반영</div>
-            <div id="scenarioBannerTitle" style="font-family: var(--font-display); font-size: 16px; font-weight: 600;">2안 균형 (권장) · 평균 +18원/kg · 1회 일괄 · 5월 적용</div>
+            <div id="scenarioBannerTitle" style="font-family: var(--font-display); font-size: 16px; font-weight: 600;">2안 균형 (권장) · 평균 +18원/kg · 1회 일괄 · 8월 적용</div>
           </div>
           <div id="scenarioBannerKpi" style="display: flex; gap: 14px; font-size: 11px;">
             <div><span style="color: #94a3b8;">예상 OP</span> <strong style="color: var(--gold); font-size: 14px;">+0억</strong></div>
@@ -3900,7 +3915,7 @@ body[data-width="full"]     { --content-max: none; }
             <div id="catManualInputs" style="display: flex; flex-direction: column; gap: 5px; margin-bottom: 10px;">
               <!-- JS로 렌더링 -->
             </div>
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px;">
+            <div class="index3-hidden-section" style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px;">
               <div data-tip="예상 OP 영향 = Σ(축종별 조정폭 × 축종별 판매량) × 환원율 ÷ 1억. 잔여 월 기준이 아닌 연간 환산값입니다." style="background: var(--surface-2); border-radius: 5px; padding: 8px;">
                 <div style="font-size: 10px; color: var(--ink-3);">예상 OP 영향</div>
                 <div id="manualExpectedOp" style="font-family: var(--font-display); font-size: 14px; font-weight: 700; color: var(--success);">+0<span style="font-size: 10px; color: var(--ink-3);"> 억</span></div>
@@ -4157,7 +4172,7 @@ body[data-width="full"]     { --content-max: none; }
         <div class="card">
           <div class="h">
             <h3>회차별 실행 일정 <span class="help-i" data-tip="회차 분할 시 각 회차 적용일·조정폭·대상 자동 산출">?</span></h3>
-            <span class="sub" id="execSched">1회 (5월)</span>
+            <span class="sub" id="execSched">1회 (8월)</span>
           </div>
           <table class="tbl" id="execTable">
             <thead>
@@ -5276,9 +5291,8 @@ function buildScheduleMonths(startMonth, rounds) {
 
 function _getConfiguredStartMonth() {
   const manual = parseInt(STATE.startMonthOverride, 10);
-  if (manual >= 1 && manual <= 12) return manual;
-  const timingLv = AXES.timing.levels[STATE.axes.timing]?.v || 1;
-  return Math.min(12, Math.max(1, 4 + timingLv));
+  if (manual >= 1 && manual <= 12) return manual === 5 ? 8 : manual;
+  return 8;
 }
 
 function _applyStartMonthToScheduleRows(rows, startMonth) {
@@ -5385,9 +5399,9 @@ const AXES = {
   },
   timing: {
     label: '최초 적용 시기 (1차 조정월)', unit: '',
-    tip: '1차 조정이 적용되는 월. 회차 분할 시 2차는 1차 + 2개월 자동 산출 (룰). 예: 1차 5월, 2차 7월',
+    tip: '1차 조정이 적용되는 월. 회차 분할 시 2차는 1차 + 2개월 자동 산출 (룰). 예: 1차 8월, 2차 10월',
     levels: [
-      { v: 1, label: '즉시 (5월)', desc: '4월 결정 → 5월 1일 1차 적용 ★' },
+      { v: 1, label: '즉시 (8월)', desc: '8월 1일 1차 적용 ★' },
       { v: 2, label: '6월',        desc: '5월 시장 관망 후 6월 1차 적용' },
       { v: 3, label: '7월',        desc: '7월 1차 적용 (성수기 진입)' },
       { v: 4, label: '8월',        desc: '8월 1차 적용 (Q3 시작)' },
@@ -5476,7 +5490,7 @@ let STATE = {
   execChecks: { ec1: false, ec2: false, ec3: false, ec4: false, ec5: false },  // 실행 체크리스트
   scenario: 'balanced',
   amountOverride: null,          // v38: 시나리오 목표달성률 역산 조정폭(원/kg). null이면 슬라이더 레벨 사용
-  startMonthOverride: null,      // 최초 적용 시기(1차 조정월) 직접 입력값. null이면 timing 축 기본값 사용
+  startMonthOverride: 8,         // 최초 적용 시기(1차 조정월) 직접 입력값. index(3) 기본 표시: 8월
   pricingScenarioTarget: null,   // 마지막 시나리오 목표 달성률. 5축 조정 후 중분류 역산 캐시 유지용
   decisions: [],
   interactionLog: [],
@@ -5557,7 +5571,9 @@ function restore() {
   if (typeof STATE.roundIntervalRuleEnabled !== 'boolean') STATE.roundIntervalRuleEnabled = true;
   if (STATE.startMonthOverride != null) {
     const sm = parseInt(STATE.startMonthOverride, 10);
-    STATE.startMonthOverride = (sm >= 1 && sm <= 12) ? sm : null;
+    STATE.startMonthOverride = (sm >= 1 && sm <= 12) ? (sm === 5 ? 8 : sm) : 8;
+  } else {
+    STATE.startMonthOverride = 8;
   }
   if (STATE.pricingScenarioTarget != null) {
     const pct = parseFloat(STATE.pricingScenarioTarget);
@@ -8390,7 +8406,7 @@ function renderScenariosMonthly() {
         : Array(12).fill(125e6);
     const vol = volSource;
     const split = splitAmountByRule(amt);
-    const months = buildScheduleMonths(5, split.length);  // 1차=5월
+    const months = buildScheduleMonths(8, split.length);  // index(3): 1차=8월
     const result = [];
     for (let m = 1; m <= 12; m++) {
       let cumAmt = 0;
@@ -8909,8 +8925,8 @@ function _syncFromMode2ToMode13() {
     } else if (Math.abs(avgAmt) > 0.0001) {
       // 기존 합이 0이거나 비어있는데 새 평균이 있으면 룰 자동 재산출
       const autoSplit = splitAmountByRule(Math.round(avgAmt), _getMaxPerRound());
-      // 시작월: 기존 1차 월 → 없으면 데이터 기반(currentMonth+2) → 그것도 없으면 5월
-      const dataFloor = (DATA.loaded && DATA.currentMonth > 0) ? DATA.currentMonth + 2 : 5;
+      // 시작월: 기존 1차 월 → 없으면 데이터 기반(currentMonth+2) → 그것도 없으면 8월
+      const dataFloor = (DATA.loaded && DATA.currentMonth > 0) ? DATA.currentMonth + 2 : 8;
       const startM = STATE.manualSchedule[0]?.month || dataFloor;
       STATE.manualSchedule = autoSplit.map((a, i) => ({
         round: i+1, amt: a,
@@ -9362,7 +9378,7 @@ function addManualRound() {
     STATE.manualSchedule = r.scheduleAmounts.map((a, i) => ({ round: i+1, month: r.scheduleMonths[i], amt: a }));
   }
   const last = STATE.manualSchedule[STATE.manualSchedule.length - 1];
-  const dataFloor = (DATA.loaded && DATA.currentMonth > 0) ? DATA.currentMonth + 2 : 5;
+  const dataFloor = (DATA.loaded && DATA.currentMonth > 0) ? DATA.currentMonth + 2 : 8;
   STATE.manualSchedule.push({
     round: STATE.manualSchedule.length + 1,
     month: Math.min(12, (last?.month || dataFloor) + _getRoundIntervalMonths()),
@@ -9933,7 +9949,7 @@ function _getOpDataBundle(cat) {
 function _getMode3StartMonth(r) {
   return (r && r.scheduleMonths && r.scheduleMonths.length > 0)
     ? r.scheduleMonths[0]
-    : ((DATA.loaded && DATA.currentMonth > 0) ? Math.min(12, DATA.currentMonth + 2) : 5);
+    : ((DATA.loaded && DATA.currentMonth > 0) ? Math.min(12, DATA.currentMonth + 2) : 8);
 }
 
 function _normalizeScheduleRows(rows, cat, keepZeroRows = false) {
@@ -9948,7 +9964,7 @@ function _normalizeScheduleRows(rows, cat, keepZeroRows = false) {
 
 function _buildScheduleRowsForAmount(amount, startMonth, cat) {
   const amounts = splitAmountByRule(Number(amount || 0), _getMaxPerRound(cat));
-  const months = buildScheduleMonths(startMonth || 5, amounts.length);
+  const months = buildScheduleMonths(startMonth || 8, amounts.length);
   return amounts.map((a, i) => ({ round: i + 1, month: months[i], amt: a }));
 }
 
@@ -12039,8 +12055,8 @@ function _buildCustomerNoticeEmail() {
   const excludedCats = groups.filter(g => Math.abs(finalCats[g.key] || 0) <= 0.0001).map(g => g.key);
   const firstMonth = Math.min(...appliedCats.map(c => {
     const sch = _getScheduleForFinal(c);
-    return sch.scheduleMonths[0] || r.startMonth || 5;
-  }).concat([r.startMonth || 5]));
+    return sch.scheduleMonths[0] || r.startMonth || 8;
+  }).concat([r.startMonth || 8]));
   const catLines = groups.map(g => `- ${_getPricingGroupLabel(g.key, _getPricingGroupLevel() === 'mid')}: ${Math.abs(finalCats[g.key] || 0) > 0.0001 ? `${_adjustmentWord(finalCats[g.key])} ${_fmtSignedWon(finalCats[g.key])}/kg` : '동결 또는 가격 조정 미적용'}`).join('\n');
   const schedLines = appliedCats.length
     ? appliedCats.map(c => {
@@ -14521,6 +14537,7 @@ async function loadLatestDpdsResultFromSupabase() {
 
   if (data.state && typeof STATE !== 'undefined') {
     Object.assign(STATE, data.state);
+    if (STATE.startMonthOverride == null || Number(STATE.startMonthOverride) === 5) STATE.startMonthOverride = 8;
   }
 
   if (typeof recomputeAndRefresh === 'function') {
@@ -14615,7 +14632,10 @@ async function loadDpdsLatestFromSupabaseButton() {
     }
 
     if (data.result && data.result.data && typeof DATA !== 'undefined') Object.assign(DATA, data.result.data);
-    if (data.state && typeof STATE !== 'undefined') Object.assign(STATE, data.state);
+    if (data.state && typeof STATE !== 'undefined') {
+      Object.assign(STATE, data.state);
+      if (STATE.startMonthOverride == null || Number(STATE.startMonthOverride) === 5) STATE.startMonthOverride = 8;
+    }
 
     if (typeof recomputeAndRefresh === 'function') recomputeAndRefresh();
     if (typeof save === 'function') save();
