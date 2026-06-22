@@ -3366,7 +3366,7 @@ body[data-width="full"]     { --content-max: none; }
           <div data-tip="Net Long = Long − Short. 양수면 시장 전체가 상승 전망 우세" style="margin-top: 8px; padding: 10px; background: var(--gold-bg, #fefcf6); border: 1px solid var(--gold); border-radius: 5px;">
             <div style="font-family: var(--font-mono); font-size: 9px; color: var(--gold); letter-spacing: .1em; margin-bottom: 2px;">NET LONG</div>
             <div id="cotNetVal" style="font-family: var(--font-display); font-size: 16px; font-weight: 700; color: var(--gold);">+166,780 계약</div>
-            <div id="cotSummary" style="font-size: 10.5px; color: var(--ink-2); margin-top: 2px;"><strong>종합 전망: 옥수수 가격 상승</strong> · ⚠ 8월 인상 근거 강화</div>
+            <div id="cotSummary" style="font-size: 10.5px; color: var(--ink-2); margin-top: 2px;"><strong>종합 전망: 옥수수 가격 상승</strong> · ⚠ 5월 인상 근거 강화</div>
           </div>
         </div>
 
@@ -3539,21 +3539,6 @@ body[data-width="full"]     { --content-max: none; }
         <strong style="color: var(--accent);">📊 시나리오 산출 기준</strong> — <span id="scenarioBasisText">현황 진단에서 실적·전망 데이터를 업로드하면, 그 목표 OP·전망 OP를 기준으로 1안 80% · 2안 90% · 3안 100% 달성에 필요한 조정폭을 자동 역산합니다.</span>
       </div>
 
-      <style>
-        /* index(3) display trim: hide requested scenario/impact summary areas only. */
-        #view-scenario .scen-metrics,
-        #view-scenario .scen-foot,
-        #scenarioBannerTitle,
-        #scenarioBannerKpi,
-        #boardScenarioNum,
-        #boardReco,
-        #boardRecoSub,
-        #boardRecoAvg,
-        .index3-hidden-section {
-          display: none !important;
-        }
-      </style>
-
       <div class="scen-grid">
         <div class="scen-card" onclick="selectScenario(1)">
           <div class="scen-tag">CONSERVATIVE</div>
@@ -3599,7 +3584,7 @@ body[data-width="full"]     { --content-max: none; }
         </div>
       </div>
 
-      <div class="card index3-hidden-section" style="margin-top: 16px;">
+      <div class="card" style="margin-top: 16px;">
         <div class="h">
           <h3>시나리오별 핵심 지표 비교 <span class="help-i" data-tip="3개 시나리오 × 4가지 핵심 지표 (회당 효율 · 연간 OP · 이탈률 · Spread Gap). Spread Gap = 사업계획 단가 가정(원/kg) − 시나리오 단가(원/kg). 양수=부족, 0=달성, 음수=초과">?</span></h3>
           <span class="sub">3 SCENARIOS × 4 KPIs · Spread Gap 포함</span>
@@ -3800,7 +3785,7 @@ body[data-width="full"]     { --content-max: none; }
         <div class="grid-3" id="axisGrid"></div>
       </div>
 
-      <div class="card index3-hidden-section">
+      <div class="card">
         <div class="h">
           <h3>실시간 영향도 (Impact)</h3>
           <span class="sub">RECALCULATED</span>
@@ -3819,7 +3804,7 @@ body[data-width="full"]     { --content-max: none; }
           <div class="stat" id="kpiRoundsCard">
             <div class="lbl">회당 효율 (핵심)</div>
             <div class="val" id="kpiEff">18.0<span class="unit">원/회</span></div>
-            <div class="delta up" id="kpiEffD">1회 (8월)</div>
+            <div class="delta up" id="kpiEffD">1회 (5월)</div>
           </div>
           <div class="stat">
             <div class="lbl">거래처 이탈</div>
@@ -3832,7 +3817,7 @@ body[data-width="full"]     { --content-max: none; }
       <div class="grid-2">
         <div class="card">
           <div class="h">
-            <h3>월별 OP 추이 — Plan / Outlook / 경영진 의사결정안 <span class="help-i" data-tip="3개 라인 비교: ① Plan(목표·점선) ② Raw Outlook(현 전망·연한선) ③ 경영진 의사결정안(슬라이더+수기 입력 반영·강조선). 인상 시작월(8월)부터 의사결정안이 Outlook 대비 상승">?</span></h3>
+            <h3>월별 OP 추이 — Plan / Outlook / 경영진 의사결정안 <span class="help-i" data-tip="3개 라인 비교: ① Plan(목표·점선) ② Raw Outlook(현 전망·연한선) ③ 경영진 의사결정안(슬라이더+수기 입력 반영·강조선). 인상 시작월(4-5월)부터 의사결정안이 Outlook 대비 상승">?</span></h3>
             <span class="sub" id="chartMonthlySub">3-LINE COMPARISON</span>
           </div>
           <div class="chart-wrap"><canvas id="chartMonthly"></canvas></div>
@@ -3865,7 +3850,7 @@ body[data-width="full"]     { --content-max: none; }
         <div id="scenarioBanner" style="background: linear-gradient(90deg, #1e293b 0%, #334155 100%); color: #fff; border-radius: 6px; padding: 12px 16px; margin-bottom: 14px; display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap;">
           <div>
             <div style="font-family: var(--font-mono); font-size: 10px; color: var(--gold); letter-spacing: .12em; margin-bottom: 3px;">SELECTED SCENARIO · 5축 가중치 자동 반영</div>
-            <div id="scenarioBannerTitle" style="font-family: var(--font-display); font-size: 16px; font-weight: 600;">2안 균형 (권장) · 평균 +18원/kg · 1회 일괄 · 8월 적용</div>
+            <div id="scenarioBannerTitle" style="font-family: var(--font-display); font-size: 16px; font-weight: 600;">2안 균형 (권장) · 평균 +18원/kg · 1회 일괄 · 5월 적용</div>
           </div>
           <div id="scenarioBannerKpi" style="display: flex; gap: 14px; font-size: 11px;">
             <div><span style="color: #94a3b8;">예상 OP</span> <strong style="color: var(--gold); font-size: 14px;">+0억</strong></div>
@@ -3908,14 +3893,14 @@ body[data-width="full"]     { --content-max: none; }
           </div>
 
           <!-- 중: Mode 2 — 축종별 수기 입력 -->
-          <div data-tip="MODE 2: 대분류 단위로 조정폭을 차등 조정합니다. ▸ 권고값은 축종별 BOM 비율을 반영합니다. ▸ 값 변경 시 가중평균이 MODE 1로, 총합이 MODE 3 회차로 자동 반영됩니다." style="background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 14px; min-width: 0; overflow: hidden;">
-            <div style="font-family: var(--font-mono); font-size: 10px; color: var(--gold); letter-spacing: .12em; margin-bottom: 8px;">MODE 2 · 대분류 조정</div>
+          <div data-tip="MODE 2: 대분류 또는 중분류 단위로 조정폭을 차등 조정합니다. ▸ 권고값은 부모 축종 BOM 비율을 반영하고, 중분류 선택 시 판매량 가중평균은 중분류 판매량 기준으로 계산합니다. ▸ 값 변경 시 가중평균이 MODE 1로, 총합이 MODE 3 회차로 자동 반영." style="background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 14px; min-width: 0; overflow: hidden;">
+            <div style="font-family: var(--font-mono); font-size: 10px; color: var(--gold); letter-spacing: .12em; margin-bottom: 8px;">MODE 2 · 조정 단위 선택</div>
             <h4 style="font-family: var(--font-display); font-size: 13px; font-weight: 600; margin: 0 0 10px;">조정폭 (경영진 최종안)</h4>
-            <div id="pricingGroupLevelSwitch" style="display:none;"></div>
+            <div id="pricingGroupLevelSwitch" style="display:flex; gap:4px; margin-bottom:8px;"></div>
             <div id="catManualInputs" style="display: flex; flex-direction: column; gap: 5px; margin-bottom: 10px;">
               <!-- JS로 렌더링 -->
             </div>
-            <div class="index3-hidden-section" style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px;">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px;">
               <div data-tip="예상 OP 영향 = Σ(축종별 조정폭 × 축종별 판매량) × 환원율 ÷ 1억. 잔여 월 기준이 아닌 연간 환산값입니다." style="background: var(--surface-2); border-radius: 5px; padding: 8px;">
                 <div style="font-size: 10px; color: var(--ink-3);">예상 OP 영향</div>
                 <div id="manualExpectedOp" style="font-family: var(--font-display); font-size: 14px; font-weight: 700; color: var(--success);">+0<span style="font-size: 10px; color: var(--ink-3);"> 억</span></div>
@@ -4015,10 +4000,10 @@ body[data-width="full"]     { --content-max: none; }
 
       <div class="card">
         <div class="h">
-          <h3>감사 로그 — 지정 액션 기록</h3>
+          <h3>감사 로그 — 클릭·조정 자동 기록</h3>
           <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
             <span class="sub" id="logCount">0 entries · 자동 저장</span>
-            <button class="btn" style="font-size:10.5px; padding:4px 8px;" onclick="exportLog()" data-tip="저장된 지정 액션 로그를 CSV로 다운로드합니다.">📥 로그 저장</button>
+            <button class="btn" style="font-size:10.5px; padding:4px 8px;" onclick="exportLog()" data-tip="저장된 클릭·조정·결재 로그를 CSV로 다운로드합니다.">📥 로그 저장</button>
           </div>
         </div>
         <div class="log-tbl-wrap">
@@ -4172,7 +4157,7 @@ body[data-width="full"]     { --content-max: none; }
         <div class="card">
           <div class="h">
             <h3>회차별 실행 일정 <span class="help-i" data-tip="회차 분할 시 각 회차 적용일·조정폭·대상 자동 산출">?</span></h3>
-            <span class="sub" id="execSched">1회 (8월)</span>
+            <span class="sub" id="execSched">1회 (5월)</span>
           </div>
           <table class="tbl" id="execTable">
             <thead>
@@ -5291,8 +5276,9 @@ function buildScheduleMonths(startMonth, rounds) {
 
 function _getConfiguredStartMonth() {
   const manual = parseInt(STATE.startMonthOverride, 10);
-  if (manual >= 1 && manual <= 12) return manual === 5 ? 8 : manual;
-  return 8;
+  if (manual >= 1 && manual <= 12) return manual;
+  const timingLv = AXES.timing.levels[STATE.axes.timing]?.v || 1;
+  return Math.min(12, Math.max(1, 4 + timingLv));
 }
 
 function _applyStartMonthToScheduleRows(rows, startMonth) {
@@ -5399,9 +5385,9 @@ const AXES = {
   },
   timing: {
     label: '최초 적용 시기 (1차 조정월)', unit: '',
-    tip: '1차 조정이 적용되는 월. 회차 분할 시 2차는 1차 + 2개월 자동 산출 (룰). 예: 1차 8월, 2차 10월',
+    tip: '1차 조정이 적용되는 월. 회차 분할 시 2차는 1차 + 2개월 자동 산출 (룰). 예: 1차 5월, 2차 7월',
     levels: [
-      { v: 1, label: '즉시 (8월)', desc: '8월 1일 1차 적용 ★' },
+      { v: 1, label: '즉시 (5월)', desc: '4월 결정 → 5월 1일 1차 적용 ★' },
       { v: 2, label: '6월',        desc: '5월 시장 관망 후 6월 1차 적용' },
       { v: 3, label: '7월',        desc: '7월 1차 적용 (성수기 진입)' },
       { v: 4, label: '8월',        desc: '8월 1차 적용 (Q3 시작)' },
@@ -5490,11 +5476,10 @@ let STATE = {
   execChecks: { ec1: false, ec2: false, ec3: false, ec4: false, ec5: false },  // 실행 체크리스트
   scenario: 'balanced',
   amountOverride: null,          // v38: 시나리오 목표달성률 역산 조정폭(원/kg). null이면 슬라이더 레벨 사용
-  startMonthOverride: 8,         // 최초 적용 시기(1차 조정월) 직접 입력값. index(3) 기본 표시: 8월
+  startMonthOverride: 8,         // 최초 적용 시기(1차 조정월) 기본값: 8월
+  startMonthDefaultAugV1: true,  // 중분류 복사본 8월 기본값 마이그레이션 완료 여부
   pricingScenarioTarget: null,   // 마지막 시나리오 목표 달성률. 5축 조정 후 중분류 역산 캐시 유지용
   decisions: [],
-  interactionLog: [],
-  auditLogPolicyV2: false,
   decisionStatus: 'pending',
   realdata: false,
   catManualAmounts: null,        // 수기 입력 조정폭 (대분류 또는 대분류|중분류)
@@ -5539,15 +5524,8 @@ function restore() {
   STATE.decisionStatus = 'pending';
   // 시작 시 항상 프로세스 개요 (Home) 페이지로 진입 (이전 페이지 기억 무시)
   STATE.view = 'view-home';
-  // 지정된 핵심 액션만 로그에 남기도록 정책 전환. 기존 잡음 로그는 최초 1회 삭제.
+  // 의사결정 로그·클릭/조정 로그·컴플라이언스 점검 이력은 보존 (감사로그 5년 보관 정책)
   if (!Array.isArray(STATE.decisions)) STATE.decisions = [];
-  if (!Array.isArray(STATE.interactionLog)) STATE.interactionLog = [];
-  if (STATE.auditLogPolicyV2 !== true) {
-    STATE.decisions = [];
-    STATE.interactionLog = [];
-    STATE.auditLogPolicyV2 = true;
-    save();
-  }
   if (STATE.decisions.length > 2000) STATE.decisions = STATE.decisions.slice(0, 2000);
   if (!Array.isArray(STATE.complianceHistory)) STATE.complianceHistory = [];
   // v25: 기존 5단계 조정폭 축(0:+8,1:+12,2:+18,3:+23,4:+28)을 8단계 조정폭 축으로 1회 마이그레이션
@@ -5561,19 +5539,15 @@ function restore() {
   if (!STATE.catSchedules || typeof STATE.catSchedules !== 'object' || Array.isArray(STATE.catSchedules)) STATE.catSchedules = {};
   if (!STATE.catNoIncrease || typeof STATE.catNoIncrease !== 'object' || Array.isArray(STATE.catNoIncrease)) STATE.catNoIncrease = {};
   if (!STATE.catManualAmountsByLevel || typeof STATE.catManualAmountsByLevel !== 'object' || Array.isArray(STATE.catManualAmountsByLevel)) STATE.catManualAmountsByLevel = {};
-  STATE.pricingGroupLevel = 'cat';
-  if (STATE.catManualAmounts && Object.keys(STATE.catManualAmounts).length && Object.keys(STATE.catManualAmounts).every(k => String(k).includes('|'))) {
-    STATE.catManualAmounts = _clonePlain(STATE.catManualAmountsByLevel.cat) || null;
-    STATE.catSchedules = {};
-    STATE.finalMonthlyCat = '전체';
-    STATE.mode3ScheduleCat = '전체';
-  }
+  if (STATE.pricingGroupLevel !== 'mid') STATE.pricingGroupLevel = 'cat';
   if (typeof STATE.roundIntervalRuleEnabled !== 'boolean') STATE.roundIntervalRuleEnabled = true;
+  if (!STATE.startMonthDefaultAugV1) {
+    STATE.startMonthOverride = 8;
+    STATE.startMonthDefaultAugV1 = true;
+  }
   if (STATE.startMonthOverride != null) {
     const sm = parseInt(STATE.startMonthOverride, 10);
-    STATE.startMonthOverride = (sm >= 1 && sm <= 12) ? (sm === 5 ? 8 : sm) : 8;
-  } else {
-    STATE.startMonthOverride = 8;
+    STATE.startMonthOverride = (sm >= 1 && sm <= 12) ? sm : null;
   }
   if (STATE.pricingScenarioTarget != null) {
     const pct = parseFloat(STATE.pricingScenarioTarget);
@@ -6615,9 +6589,6 @@ function selectScenario(num) {
   };
   const key = map[num] || map[String(num)] || 'balanced';
   applyPreset(key);
-  if ([1, 2, 3].includes(Number(num))) {
-    writeAuditLog('판가 시나리오 선택', `${PRESETS[key].num} · ${PRESETS[key].name}`, 'AUTO SAVE', '사용자 조작');
-  }
   // 카드 강조 — 양수/음수 카드 모두 처리
   document.querySelectorAll('#view-scenario .scen-card').forEach(c => c.classList.remove('selected'));
   // onclick 속성에서 같은 num을 가진 카드를 selected로 표시
@@ -6802,16 +6773,12 @@ function renderChecks() {
 /* 카드 전체 클릭: 체크 토글 (체크 = 상세 자동 표시) */
 function toggleCheckCard(id) {
   STATE.checks[id] = !STATE.checks[id];
-  const item = CHECKS.find(c => c.id === id);
-  writeAuditLog('리스크 자가진단', `${item?.label || id} · ${STATE.checks[id] ? '체크' : '해제'}`, 'AUTO SAVE', '사용자 조작');
   renderChecks();
   save();
 }
 
 function toggleCheck(id) {
   STATE.checks[id] = !STATE.checks[id];
-  const item = CHECKS.find(c => c.id === id);
-  writeAuditLog('리스크 자가진단', `${item?.label || id} · ${STATE.checks[id] ? '체크' : '해제'}`, 'AUTO SAVE', '사용자 조작');
   renderChecks();
   save();
 }
@@ -7054,7 +7021,15 @@ function recordDecision(action) {
 
   const preset = PRESETS[STATE.scenario];
   const detail = `${preset?.num || '커스텀'} · ${_fmtSignedWon(r.amt)}/kg · ${r.rounds}회 · 효율 ${_fmtSignedWon(r.efficiency)}/회 · OP ${_fmtSignedOku(r.opAnnual)}`;
-  if (action === '승인') writeAuditLog('승인', detail, '§40 OK', '경영진');
+  STATE.decisions.unshift({
+    time: fmt.date(),
+    user: '경영진',
+    action,
+    detail,
+    law: '§40 OK',
+    actionClass: action === '승인' ? 'pos' : action === '보류' ? 'warn' : 'neg'
+  });
+  if (STATE.decisions.length > 2000) STATE.decisions = STATE.decisions.slice(0, 2000);
   STATE.decisionStatus = action === '승인' ? 'approve' : action === '보류' ? 'hold' : 'review';
   renderLog();
   save();
@@ -7067,8 +7042,17 @@ function recordDecision(action) {
     STATE.complianceHistory.unshift(cmpResult);
     if (STATE.complianceHistory.length > 100) STATE.complianceHistory = STATE.complianceHistory.slice(0, 100);
 
-    // 2) 컴플라이언스 상세 결과는 이력 테이블에만 보관하고 감사 로그에는 승인 이벤트만 남김
+    // 2) 감사로그(decisions)에도 별도 항목으로 추가 기록 — 결재 직후 시점
     const cmpDetail = `${cmpResult.scenarioNum} ${cmpResult.scenarioName} · ${_fmtSignedWon(cmpResult.amt)}/kg · ${cmpResult.rounds}회 · OP ${_fmtSignedOku(cmpResult.opAnnualOku)} · 7대원칙 7/7 · 5위험 회피 5/5 · 주의표현 ${cmpResult.phraseFindings.length}건 · 경쟁사 데이터 0건`;
+    STATE.decisions.unshift({
+      time: cmpResult.timestamp,
+      user: '시스템 자동',
+      action: cmpResult.overall === 'PASS' ? '§40 점검' : '§40 검토',
+      detail: cmpDetail,
+      law: cmpResult.overall === 'PASS' ? '§40 PASS' : '§40 WARN',
+      actionClass: cmpResult.overall === 'PASS' ? 'pos' : 'warn'
+    });
+    if (STATE.decisions.length > 2000) STATE.decisions = STATE.decisions.slice(0, 2000);
 
     // 3) 컴플라이언스 페이지 이력 테이블이 열려있다면 즉시 갱신
     renderLog();
@@ -7138,16 +7122,28 @@ function writeAuditLog(action, detail, law = 'UI LOG', user = '시스템 기록'
     const safeAction = _dpdsCleanText(action);
     const safeDetail = _dpdsCleanText(detail);
 
-    const allowedActions = new Set([
-      '데이터 업로드',
-      '자구노력 KPI 업로드',
-      '리스크 자가진단',
-      '판가 시나리오 선택',
-      '최종안 적용',
-      '승인',
-      '실행 체크리스트'
-    ]);
-    if (!allowedActions.has(safeAction)) return;
+    // v42: 핵심 액션만 보관 (판가 결정·체크리스트·공정위 §40 대응 중심)
+    //      나머지 액션(메뉴 이동·접기/펼치기·차트 클릭·일반 UI 클릭)은 노이즈로 간주하여 저장 생략
+    const combined = `${safeAction} ${safeDetail} ${law}`.toLowerCase();
+    const KEEP_KEYWORDS = [
+      // 판가 의사결정 관련
+      '판가', '가격', '인상', '인하', '동결', '조정폭', '시나리오', '의사결정', '결재',
+      '승인', '거부', '보류', '회차', '축종별', 'mode 1', 'mode 2', 'mode 3', '최종안',
+      // 컴플라이언스·법무
+      '§40', '공정거래', '컴플라이언스', '체크리스트', '리스크 게이트', '준법',
+      '약탈가', 'cartel', '경쟁사', '법무',
+      // 데이터·검증
+      '업로드', '데이터 입력', '검증', '데이터 변경', '실적', '실행계획', '사업계획',
+      // 실행·통보
+      '실행', '거래처 통보', 'erp', '단가표', '다운로드',
+      // 가중치·정책
+      '프리셋', '가중치', '비연동', '연동', '필터', '환원율'
+    ];
+    const isKeyAction = KEEP_KEYWORDS.some(k => combined.includes(k));
+    if (!isKeyAction) {
+      // 핵심 키워드가 없으면 화면 표시용 interactionLog에만 기록하고 영구 로그(decisions)에서 제외
+      // → CSV/감사 보고 시 노이즈 제거
+    }
 
     if (!window.__dpdsRecentAuditKeys) window.__dpdsRecentAuditKeys = new Map();
     const key = `${safeAction}|${safeDetail}|${law}`;
@@ -7163,8 +7159,12 @@ function writeAuditLog(action, detail, law = 'UI LOG', user = '시스템 기록'
       law,
       actionClass: safeAction.includes('조정') || safeAction.includes('변경') ? 'warn' : 'info'
     };
-    STATE.decisions.unshift(entry);
-    if (STATE.decisions.length > 2000) STATE.decisions = STATE.decisions.slice(0, 2000);
+    // v42: decisions (영구 감사 로그) — 핵심 액션만 저장
+    if (isKeyAction) {
+      STATE.decisions.unshift(entry);
+      if (STATE.decisions.length > 2000) STATE.decisions = STATE.decisions.slice(0, 2000);
+    }
+    // interactionLog (UI 표시용 활동 로그) — 모두 저장하되 분량 제한
     STATE.interactionLog.unshift(entry);
     if (STATE.interactionLog.length > 500) STATE.interactionLog = STATE.interactionLog.slice(0, 500);
     renderLog();
@@ -7193,8 +7193,6 @@ function _dpdsDescribeClickTarget(target) {
   return { category, detail: `${view} · ${label}${meta.length ? ' · ' + meta.join(' · ') : ''}` };
 }
 function initInteractionLogger() {
-  // 지정된 업무 이벤트만 수동 기록한다. 전역 클릭/입력 자동 수집은 감사 로그 노이즈라 비활성화.
-  return;
   if (window.__dpdsInteractionLoggerReady) return;
   window.__dpdsInteractionLoggerReady = true;
   const inputTimers = new WeakMap();
@@ -7246,7 +7244,7 @@ function renderLog() {
   if (cnt) cnt.textContent = `${STATE.decisions.length} entries · 자동 저장`;
   if (!tbody) return;
   if (STATE.decisions.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:24px; color:var(--ink-3); font-size:12px;">아직 지정 액션 로그가 없습니다.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:24px; color:var(--ink-3); font-size:12px;">아직 클릭·조정·의사결정 이력이 없습니다.</td></tr>';
     return;
   }
   const colorMap = {
@@ -8406,7 +8404,7 @@ function renderScenariosMonthly() {
         : Array(12).fill(125e6);
     const vol = volSource;
     const split = splitAmountByRule(amt);
-    const months = buildScheduleMonths(8, split.length);  // index(3): 1차=8월
+    const months = buildScheduleMonths(5, split.length);  // 1차=5월
     const result = [];
     for (let m = 1; m <= 12; m++) {
       let cumAmt = 0;
@@ -8925,8 +8923,8 @@ function _syncFromMode2ToMode13() {
     } else if (Math.abs(avgAmt) > 0.0001) {
       // 기존 합이 0이거나 비어있는데 새 평균이 있으면 룰 자동 재산출
       const autoSplit = splitAmountByRule(Math.round(avgAmt), _getMaxPerRound());
-      // 시작월: 기존 1차 월 → 없으면 데이터 기반(currentMonth+2) → 그것도 없으면 8월
-      const dataFloor = (DATA.loaded && DATA.currentMonth > 0) ? DATA.currentMonth + 2 : 8;
+      // 시작월: 기존 1차 월 → 없으면 데이터 기반(currentMonth+2) → 그것도 없으면 5월
+      const dataFloor = (DATA.loaded && DATA.currentMonth > 0) ? DATA.currentMonth + 2 : 5;
       const startM = STATE.manualSchedule[0]?.month || dataFloor;
       STATE.manualSchedule = autoSplit.map((a, i) => ({
         round: i+1, amt: a,
@@ -9378,7 +9376,7 @@ function addManualRound() {
     STATE.manualSchedule = r.scheduleAmounts.map((a, i) => ({ round: i+1, month: r.scheduleMonths[i], amt: a }));
   }
   const last = STATE.manualSchedule[STATE.manualSchedule.length - 1];
-  const dataFloor = (DATA.loaded && DATA.currentMonth > 0) ? DATA.currentMonth + 2 : 8;
+  const dataFloor = (DATA.loaded && DATA.currentMonth > 0) ? DATA.currentMonth + 2 : 5;
   STATE.manualSchedule.push({
     round: STATE.manualSchedule.length + 1,
     month: Math.min(12, (last?.month || dataFloor) + _getRoundIntervalMonths()),
@@ -9648,7 +9646,7 @@ function setRoundIntervalRuleEnabled(enabled) {
 }
 
 function _getPricingGroupLevel() {
-  return 'cat';
+  return STATE.pricingGroupLevel === 'mid' ? 'mid' : 'cat';
 }
 
 function _getPricingGroups() {
@@ -9749,12 +9747,19 @@ function _getPricingGroupKeyForSku(sku) {
 function _renderPricingGroupLevelSwitch() {
   const el = document.getElementById('pricingGroupLevelSwitch');
   if (!el) return;
-  el.innerHTML = '';
-  el.style.display = 'none';
+  const level = _getPricingGroupLevel();
+  el.innerHTML = ['cat', 'mid'].map(v => {
+    const active = level === v;
+    const label = v === 'cat' ? '대분류' : '중분류';
+    const tip = v === 'cat'
+      ? '기존 방식입니다. 양계·양돈·축우·양어 단위로 조정합니다.'
+      : '업로드 데이터의 대분류|중분류 단위로 조정합니다. 중분류별 판매량으로 OP 영향을 계산합니다.';
+    return `<button class="btn${active ? ' gold' : ''}" style="font-size: 10.5px; padding: 4px 9px; flex:1;" onclick="setPricingGroupLevel('${v}')" data-tip="${tip}">${label}</button>`;
+  }).join('');
 }
 
 function setPricingGroupLevel(level) {
-  const next = 'cat';
+  const next = level === 'mid' ? 'mid' : 'cat';
   if (STATE.pricingGroupLevel === next) return;
   _saveCurrentPricingLevelAmounts();
   const prevAmounts = _clonePlain(STATE.catManualAmounts);
@@ -9949,7 +9954,7 @@ function _getOpDataBundle(cat) {
 function _getMode3StartMonth(r) {
   return (r && r.scheduleMonths && r.scheduleMonths.length > 0)
     ? r.scheduleMonths[0]
-    : ((DATA.loaded && DATA.currentMonth > 0) ? Math.min(12, DATA.currentMonth + 2) : 8);
+    : ((DATA.loaded && DATA.currentMonth > 0) ? Math.min(12, DATA.currentMonth + 2) : 5);
 }
 
 function _normalizeScheduleRows(rows, cat, keepZeroRows = false) {
@@ -9964,7 +9969,7 @@ function _normalizeScheduleRows(rows, cat, keepZeroRows = false) {
 
 function _buildScheduleRowsForAmount(amount, startMonth, cat) {
   const amounts = splitAmountByRule(Number(amount || 0), _getMaxPerRound(cat));
-  const months = buildScheduleMonths(startMonth || 8, amounts.length);
+  const months = buildScheduleMonths(startMonth || 5, amounts.length);
   return amounts.map((a, i) => ({ round: i + 1, month: months[i], amt: a }));
 }
 
@@ -9996,19 +10001,16 @@ function _getScheduleForFinal(cat = '전체') {
     };
   }
 
-  // 전체 탭: 수기 일정이 없으면 MODE 2 최종 축종별 조정폭의 물량 가중평균으로 자동 분할한다.
-  // 이렇게 해야 MODE 2에서 축종별 금액을 바꿀 때 MODE 3 전체 평균도 함께 움직인다.
-  const finalCats = _getFinalCatAmounts(r);
-  const weightedAvg = _avgFromCatAmounts(finalCats);
+  // 전체 탭: 하단 MANUAL 편집기가 만든 전체 일정만 사용. 축종별 조정은 전체 평균 OP 산출 시 별도 합산된다.
   const rows = STATE.manualSchedule
     ? _normalizeScheduleRows(STATE.manualSchedule, cat, true)
-    : _buildScheduleRowsForAmount(weightedAvg, _getMode3StartMonth(r), cat);
+    : (r.scheduleAmounts || []).map((a, i) => ({ round: i + 1, month: r.scheduleMonths[i], amt: a }));
   return {
     r,
     scheduleAmounts: rows.map(s => s.amt || 0),
     scheduleMonths: rows.map(s => s.month),
     rows,
-    source: STATE.manualSchedule ? 'overall-manual' : 'overall-weighted-auto'
+    source: STATE.manualSchedule ? 'overall-manual' : 'overall-auto'
   };
 }
 
@@ -10659,12 +10661,24 @@ function handleTrackingUpload(event) {
       });
       if (STATE.trackingHistory.length > 60) STATE.trackingHistory = STATE.trackingHistory.slice(0, 60);
 
+      // 감사로그(decisions)에 자동 기록 — 5년 보관
+      const logDetail = `${file.name} · 실적 ${result.actualMonth}월 · 적용 ${result.appliedRounds}/${result.totalRounds}회차 · 진척률 ${result.progressRate}% · 실측 OP ${result.actualOpOku}억 · 예측정확도 ${result.accuracyPct}%`;
+      STATE.decisions.unshift({
+        time: fmt.date(),
+        user: '시스템 자동',
+        action: '진척률 기록',
+        detail: logDetail,
+        law: '§40 OK',
+        actionClass: result.status === 'complete' ? 'pos' : 'warn'
+      });
+      if (STATE.decisions.length > 2000) STATE.decisions = STATE.decisions.slice(0, 2000);
+
       // UI 갱신
       renderTrackingBaseline();
       renderTrackingProgress(result);
       renderTrackingHistory();
       renderLog();
-      showToast(`✓ 진척률 산출 완료 (${ms}ms) — 적용 ${result.appliedRounds}/${result.totalRounds}회차, 진척률 ${result.progressRate}%`, 'success');
+      showToast(`✓ 진척률 산출 완료 (${ms}ms) — 적용 ${result.appliedRounds}/${result.totalRounds}회차, 진척률 ${result.progressRate}%, 감사로그 기록`, 'success');
       save();
     } catch(err) {
       console.error('[Tracking Upload Error]', err);
@@ -11617,7 +11631,16 @@ function uploadTeamData(evt) {
           owner: data.teams[tid].owner || ''
         };
       });
-      writeAuditLog('자구노력 KPI 업로드', `${file.name} · ${Object.keys(data.teams).length}개 부서 데이터 갱신 (금지어 검사 통과)`, '§40 OK', '시스템 자동');
+      // 감사로그 기록
+      STATE.decisions.unshift({
+        time: fmt.date(),
+        user: '시스템 자동',
+        action: '팀데이터',
+        detail: `JSON 업로드 — ${Object.keys(data.teams).length}개 부서 데이터 갱신 (금지어 검사 통과)`,
+        law: '§40 OK',
+        actionClass: 'pos'
+      });
+      if (STATE.decisions.length > 2000) STATE.decisions = STATE.decisions.slice(0, 2000);
       save();
       renderTeamData();
       renderLog();
@@ -11736,9 +11759,6 @@ function renderExecChecklist() {
 /* === 실행 체크리스트 토글 === */
 function toggleExecCheck(id) {
   STATE.execChecks[id] = !STATE.execChecks[id];
-  const item = document.querySelector(`#execChecklist .check-item[data-id="${id}"]`);
-  const label = item?.querySelector('.check-text')?.textContent?.trim() || item?.textContent?.trim() || id;
-  writeAuditLog('실행 체크리스트', `${label} · ${STATE.execChecks[id] ? '체크' : '해제'}`, 'AUTO SAVE', '사용자 조작');
   renderExecChecklist();
   save();
 }
@@ -12055,8 +12075,8 @@ function _buildCustomerNoticeEmail() {
   const excludedCats = groups.filter(g => Math.abs(finalCats[g.key] || 0) <= 0.0001).map(g => g.key);
   const firstMonth = Math.min(...appliedCats.map(c => {
     const sch = _getScheduleForFinal(c);
-    return sch.scheduleMonths[0] || r.startMonth || 8;
-  }).concat([r.startMonth || 8]));
+    return sch.scheduleMonths[0] || r.startMonth || 5;
+  }).concat([r.startMonth || 5]));
   const catLines = groups.map(g => `- ${_getPricingGroupLabel(g.key, _getPricingGroupLevel() === 'mid')}: ${Math.abs(finalCats[g.key] || 0) > 0.0001 ? `${_adjustmentWord(finalCats[g.key])} ${_fmtSignedWon(finalCats[g.key])}/kg` : '동결 또는 가격 조정 미적용'}`).join('\n');
   const schedLines = appliedCats.length
     ? appliedCats.map(c => {
@@ -14537,7 +14557,6 @@ async function loadLatestDpdsResultFromSupabase() {
 
   if (data.state && typeof STATE !== 'undefined') {
     Object.assign(STATE, data.state);
-    if (STATE.startMonthOverride == null || Number(STATE.startMonthOverride) === 5) STATE.startMonthOverride = 8;
   }
 
   if (typeof recomputeAndRefresh === 'function') {
@@ -14632,10 +14651,7 @@ async function loadDpdsLatestFromSupabaseButton() {
     }
 
     if (data.result && data.result.data && typeof DATA !== 'undefined') Object.assign(DATA, data.result.data);
-    if (data.state && typeof STATE !== 'undefined') {
-      Object.assign(STATE, data.state);
-      if (STATE.startMonthOverride == null || Number(STATE.startMonthOverride) === 5) STATE.startMonthOverride = 8;
-    }
+    if (data.state && typeof STATE !== 'undefined') Object.assign(STATE, data.state);
 
     if (typeof recomputeAndRefresh === 'function') recomputeAndRefresh();
     if (typeof save === 'function') save();
