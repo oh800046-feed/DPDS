@@ -3900,16 +3900,6 @@ body[data-width="full"]     { --content-max: none; }
             <div id="catManualInputs" style="display: flex; flex-direction: column; gap: 5px; margin-bottom: 10px;">
               <!-- JS로 렌더링 -->
             </div>
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px;">
-              <div data-tip="예상 OP 영향 = Σ(축종별 조정폭 × 축종별 판매량) × 환원율 ÷ 1억. 잔여 월 기준이 아닌 연간 환산값입니다." style="background: var(--surface-2); border-radius: 5px; padding: 8px;">
-                <div style="font-size: 10px; color: var(--ink-3);">예상 OP 영향</div>
-                <div id="manualExpectedOp" style="font-family: var(--font-display); font-size: 14px; font-weight: 700; color: var(--success);">+0<span style="font-size: 10px; color: var(--ink-3);"> 억</span></div>
-              </div>
-              <div data-tip="달성률 = 예상 OP 영향 ÷ OP 격차(목표−전망) × 100. 100% 이상이면 목표 달성, 90~100% 권장, 80% 미만 시 추가 조정 검토." style="background: var(--surface-2); border-radius: 5px; padding: 8px;">
-                <div style="font-size: 10px; color: var(--ink-3);">달성률</div>
-                <div id="manualAchievement" style="font-family: var(--font-display); font-size: 14px; font-weight: 700; color: var(--gold);">0<span style="font-size: 10px; color: var(--ink-3);">%</span></div>
-              </div>
-            </div>
           </div>
 
           <!-- 우: Mode 3 — 회차 정책 (룰 자동 + 수기 일정) -->
@@ -5276,9 +5266,8 @@ function buildScheduleMonths(startMonth, rounds) {
 
 function _getConfiguredStartMonth() {
   const manual = parseInt(STATE.startMonthOverride, 10);
-  if (manual >= 1 && manual <= 12) return manual;
-  const timingLv = AXES.timing.levels[STATE.axes.timing]?.v || 1;
-  return Math.min(12, Math.max(1, 4 + timingLv));
+  if (manual >= 1 && manual <= 12) return manual === 5 ? 8 : manual;
+  return 8;
 }
 
 function _applyStartMonthToScheduleRows(rows, startMonth) {
@@ -5336,6 +5325,64 @@ function _setCachedPricingLevelAmounts(level, amounts) {
   STATE.catManualAmountsByLevel[level] = _clonePlain(amounts);
 }
 
+let _pricingGroupDataWaitTimer = null;
+let _pricingGroupDataWaitCount = 0;
+
+function _prepareCurrentPricingLevelForRender() {
+  const level = _getPricingGroupLevel();
+  const midRows = DATA.loaded && DATA.agg?.outlook?.byMid;
+  if (level === 'mid' && (!midRows || !Object.keys(midRows).length)) {
+    const wrap = document.getElementById('catManualInputs');
+    if (wrap) wrap.innerHTML = '<div style="padding:12px 4px; color:var(--ink-3); font-size:11px;">중분류 데이터를 불러오는 중입니다.</div>';
+    clearTimeout(_pricingGroupDataWaitTimer);
+    if (_pricingGroupDataWaitCount < 40) {
+      _pricingGroupDataWaitCount += 1;
+      _pricingGroupDataWaitTimer = setTimeout(() => {
+        if (STATE.view === 'view-decision') renderDecisionCharts();
+      }, 250);
+    }
+    return false;
+  }
+
+  _pricingGroupDataWaitCount = 0;
+  clearTimeout(_pricingGroupDataWaitTimer);
+  if (STATE.pricingTotalConservationV1 !== true) {
+    const catBase = _getCachedPricingLevelAmounts('cat') || (level === 'cat' ? _clonePlain(STATE.catManualAmounts) : null);
+    const midShape = _getCachedPricingLevelAmounts('mid') || (level === 'mid' ? _clonePlain(STATE.catManualAmounts) : null);
+    if (catBase) {
+      const normalizedMid = _convertPricingAmountsPreservingTotal('cat', 'mid', catBase, midShape);
+      _setCachedPricingLevelAmounts('cat', catBase);
+      _setCachedPricingLevelAmounts('mid', normalizedMid);
+      STATE.catManualAmounts = level === 'mid' ? normalizedMid : catBase;
+    }
+    STATE.pricingTotalConservationV1 = true;
+  }
+  const groups = _getPricingGroups();
+  const keys = new Set(groups.map(g => g.key));
+  const current = STATE.catManualAmounts;
+  const hasCurrentGroupKey = current && Object.keys(current).some(key => keys.has(key));
+  if (!groups.length || hasCurrentGroupKey) return true;
+
+  const cached = _getCachedPricingLevelAmounts(level);
+  const hasCachedGroupKey = cached && Object.keys(cached).some(key => keys.has(key));
+  if (hasCachedGroupKey) {
+    STATE.catManualAmounts = cached;
+  } else {
+    const target = SCENARIO_ACH_TARGETS[STATE.scenario] ?? STATE.pricingScenarioTarget;
+    if (level === 'mid' && target != null) {
+      const catBase = _getCachedPricingLevelAmounts('cat') || _solvePricingAmountsForLevel('cat', target);
+      const midShape = _solvePricingAmountsForLevel('mid', target);
+      STATE.catManualAmounts = _convertPricingAmountsPreservingTotal('cat', 'mid', catBase, midShape);
+    } else {
+      STATE.catManualAmounts = target != null
+        ? _solveCatAmountsForAchievement(target)
+        : _getCatRecommendedAmounts(compute().amt);
+    }
+    _setCachedPricingLevelAmounts(level, STATE.catManualAmounts);
+  }
+  return true;
+}
+
 function _solvePricingAmountsForLevel(level, targetAchPct) {
   const savedLevel = STATE.pricingGroupLevel;
   STATE.pricingGroupLevel = level === 'mid' ? 'mid' : 'cat';
@@ -5344,6 +5391,69 @@ function _solvePricingAmountsForLevel(level, targetAchPct) {
   } finally {
     STATE.pricingGroupLevel = savedLevel;
   }
+}
+
+function _getPricingGroupsForLevel(level) {
+  const savedLevel = STATE.pricingGroupLevel;
+  STATE.pricingGroupLevel = level === 'mid' ? 'mid' : 'cat';
+  try {
+    return _getPricingGroups().map(g => Object.assign({}, g));
+  } finally {
+    STATE.pricingGroupLevel = savedLevel;
+  }
+}
+
+function _getPricingConservationQty(group) {
+  const savedLevel = STATE.pricingGroupLevel;
+  STATE.pricingGroupLevel = String(group.key || '').includes('|') ? 'mid' : 'cat';
+  try {
+    const bundle = _getOpDataBundle(group.key);
+    return Number(bundle?.qtyNonLinked || bundle?.qty || group.qty || 0);
+  } finally {
+    STATE.pricingGroupLevel = savedLevel;
+  }
+}
+
+function _convertPricingAmountsPreservingTotal(fromLevel, toLevel, amounts, preferredTarget) {
+  const source = amounts || {};
+  if (fromLevel === toLevel) return _clonePlain(source);
+  const cats = _getPricingGroupsForLevel('cat');
+  const mids = _getPricingGroupsForLevel('mid');
+  const result = {};
+
+  if (fromLevel === 'cat' && toLevel === 'mid') {
+    cats.forEach(catGroup => {
+      const children = mids.filter(g => g.cat === catGroup.cat);
+      if (!children.length) return;
+      const parentQty = _getPricingConservationQty(catGroup);
+      const childQty = children.map(g => _getPricingConservationQty(g));
+      const desiredEffect = Number(source[catGroup.key] || 0) * parentQty;
+      const preferredEffect = children.reduce((sum, g, i) => sum + Number(preferredTarget?.[g.key] || 0) * childQty[i], 0);
+      if (Math.abs(preferredEffect) > 0.000001) {
+        const scale = desiredEffect / preferredEffect;
+        children.forEach(g => { result[g.key] = Math.round(Number(preferredTarget[g.key] || 0) * scale * 1000000) / 1000000; });
+      } else {
+        const qtySum = childQty.reduce((sum, q) => sum + q, 0);
+        const uniform = qtySum > 0 ? desiredEffect / qtySum : Number(source[catGroup.key] || 0);
+        children.forEach(g => { result[g.key] = Math.round(uniform * 1000000) / 1000000; });
+      }
+    });
+    return result;
+  }
+
+  if (fromLevel === 'mid' && toLevel === 'cat') {
+    cats.forEach(catGroup => {
+      const children = mids.filter(g => g.cat === catGroup.cat);
+      const parentQty = _getPricingConservationQty(catGroup);
+      const childEffect = children.reduce((sum, g) => sum + Number(source[g.key] || 0) * _getPricingConservationQty(g), 0);
+      const childQtySum = children.reduce((sum, g) => sum + _getPricingConservationQty(g), 0);
+      const denominator = parentQty > 0 ? parentQty : childQtySum;
+      result[catGroup.key] = denominator > 0 ? Math.round(childEffect / denominator * 1000000) / 1000000 : 0;
+    });
+    return result;
+  }
+
+  return _clonePlain(source);
 }
 
 const AXES = {
@@ -5484,6 +5594,7 @@ let STATE = {
   realdata: false,
   catManualAmounts: null,        // 수기 입력 조정폭 (대분류 또는 대분류|중분류)
   catManualAmountsByLevel: {},    // 조정 단위별 수기/시나리오 조정폭 캐시 {cat:{...}, mid:{...}}
+  pricingTotalConservationV1: false, // 대분류 총효과와 중분류 배분 총효과 일치 마이그레이션
   catNoIncrease: {},             // MODE 2 조정 미적용 여부 {양계:true, 양계|산란계:true, ...}
   pricingGroupLevel: 'cat',      // MODE 2 조정 단위: cat=대분류, mid=중분류
   churnHistoryOption: { enabled: false, rows: [], uploadedAt: null }, // 거래처 이탈 고도화 옵션
@@ -5547,7 +5658,9 @@ function restore() {
   }
   if (STATE.startMonthOverride != null) {
     const sm = parseInt(STATE.startMonthOverride, 10);
-    STATE.startMonthOverride = (sm >= 1 && sm <= 12) ? sm : null;
+    STATE.startMonthOverride = (sm >= 1 && sm <= 12) ? (sm === 5 ? 8 : sm) : 8;
+  } else {
+    STATE.startMonthOverride = 8;
   }
   if (STATE.pricingScenarioTarget != null) {
     const pct = parseFloat(STATE.pricingScenarioTarget);
@@ -6556,7 +6669,8 @@ function applyPreset(name) {
     //   전사 평균×BOM비율 대신, 각 축종이 (자기 목표 × 시나리오%)에 도달하는 조정폭을 개별 역산
     STATE.catNoIncrease = {};   // 제외 상태 초기화 먼저
     const catSolved = _solvePricingAmountsForLevel('cat', targetPct);
-    const midSolved = _solvePricingAmountsForLevel('mid', targetPct);
+    const midShape = _solvePricingAmountsForLevel('mid', targetPct);
+    const midSolved = _convertPricingAmountsPreservingTotal('cat', 'mid', catSolved, midShape);
     _setCachedPricingLevelAmounts('cat', catSolved);
     _setCachedPricingLevelAmounts('mid', midSolved);
     STATE.catManualAmounts = _getCachedPricingLevelAmounts(_getPricingGroupLevel());
@@ -8607,6 +8721,7 @@ const VERTICAL_MARKER_PLUGIN = {
 };
 
 function renderDecisionCharts() {
+  if (!_prepareCurrentPricingLevelForRender()) return;
   const r = compute();
 
   /* ============ 1. 월별 OP 추이 (3선 + 가격 조정 시점 마커) ============ */
@@ -9761,18 +9876,26 @@ function _renderPricingGroupLevelSwitch() {
 function setPricingGroupLevel(level) {
   const next = level === 'mid' ? 'mid' : 'cat';
   if (STATE.pricingGroupLevel === next) return;
+  const previousLevel = _getPricingGroupLevel();
   _saveCurrentPricingLevelAmounts();
   const prevAmounts = _clonePlain(STATE.catManualAmounts);
   const prevAvg = prevAmounts ? _avgFromCatAmounts(prevAmounts) : null;
   STATE.pricingGroupLevel = next;
 
   const cached = _getCachedPricingLevelAmounts(next);
-  if (cached) {
-    STATE.catManualAmounts = cached;
+  if (prevAmounts) {
+    STATE.catManualAmounts = _convertPricingAmountsPreservingTotal(previousLevel, next, prevAmounts, cached);
   } else if (SCENARIO_ACH_TARGETS[STATE.scenario] != null) {
-    STATE.catManualAmounts = _solveCatAmountsForAchievement(SCENARIO_ACH_TARGETS[STATE.scenario]);
+    const target = SCENARIO_ACH_TARGETS[STATE.scenario];
+    const catBase = _solvePricingAmountsForLevel('cat', target);
+    STATE.catManualAmounts = next === 'mid'
+      ? _convertPricingAmountsPreservingTotal('cat', 'mid', catBase, _solvePricingAmountsForLevel('mid', target))
+      : catBase;
   } else if (STATE.pricingScenarioTarget != null) {
-    STATE.catManualAmounts = _solveCatAmountsForAchievement(STATE.pricingScenarioTarget);
+    const catBase = _solvePricingAmountsForLevel('cat', STATE.pricingScenarioTarget);
+    STATE.catManualAmounts = next === 'mid'
+      ? _convertPricingAmountsPreservingTotal('cat', 'mid', catBase, _solvePricingAmountsForLevel('mid', STATE.pricingScenarioTarget))
+      : catBase;
   } else if (prevAmounts && Number.isFinite(prevAvg)) {
     STATE.catManualAmounts = _getCatRecommendedAmounts(prevAvg);
   } else {
@@ -9954,7 +10077,7 @@ function _getOpDataBundle(cat) {
 function _getMode3StartMonth(r) {
   return (r && r.scheduleMonths && r.scheduleMonths.length > 0)
     ? r.scheduleMonths[0]
-    : ((DATA.loaded && DATA.currentMonth > 0) ? Math.min(12, DATA.currentMonth + 2) : 5);
+    : ((DATA.loaded && DATA.currentMonth > 0) ? Math.min(12, DATA.currentMonth + 2) : 8);
 }
 
 function _normalizeScheduleRows(rows, cat, keepZeroRows = false) {
@@ -9969,7 +10092,7 @@ function _normalizeScheduleRows(rows, cat, keepZeroRows = false) {
 
 function _buildScheduleRowsForAmount(amount, startMonth, cat) {
   const amounts = splitAmountByRule(Number(amount || 0), _getMaxPerRound(cat));
-  const months = buildScheduleMonths(startMonth || 5, amounts.length);
+  const months = buildScheduleMonths(startMonth || 8, amounts.length);
   return amounts.map((a, i) => ({ round: i + 1, month: months[i], amt: a }));
 }
 
@@ -12075,8 +12198,8 @@ function _buildCustomerNoticeEmail() {
   const excludedCats = groups.filter(g => Math.abs(finalCats[g.key] || 0) <= 0.0001).map(g => g.key);
   const firstMonth = Math.min(...appliedCats.map(c => {
     const sch = _getScheduleForFinal(c);
-    return sch.scheduleMonths[0] || r.startMonth || 5;
-  }).concat([r.startMonth || 5]));
+    return sch.scheduleMonths[0] || r.startMonth || 8;
+  }).concat([r.startMonth || 8]));
   const catLines = groups.map(g => `- ${_getPricingGroupLabel(g.key, _getPricingGroupLevel() === 'mid')}: ${Math.abs(finalCats[g.key] || 0) > 0.0001 ? `${_adjustmentWord(finalCats[g.key])} ${_fmtSignedWon(finalCats[g.key])}/kg` : '동결 또는 가격 조정 미적용'}`).join('\n');
   const schedLines = appliedCats.length
     ? appliedCats.map(c => {
@@ -13701,7 +13824,13 @@ function recomputeAndRefresh() {
       STATE.axes.amount = bestIdx;
       // v44: 데이터가 바뀌면 축종별 차등 조정폭도 재계산 (양계·축우 Gap 해소)
       if (typeof _solveCatAmountsForAchievement === 'function') {
-        STATE.catManualAmounts = _solveCatAmountsForAchievement(SCENARIO_ACH_TARGETS[STATE.scenario]);
+        const target = SCENARIO_ACH_TARGETS[STATE.scenario];
+        const catSolved = _solvePricingAmountsForLevel('cat', target);
+        const midShape = _solvePricingAmountsForLevel('mid', target);
+        const midSolved = _convertPricingAmountsPreservingTotal('cat', 'mid', catSolved, midShape);
+        _setCachedPricingLevelAmounts('cat', catSolved);
+        _setCachedPricingLevelAmounts('mid', midSolved);
+        STATE.catManualAmounts = _getCachedPricingLevelAmounts(_getPricingGroupLevel());
       }
     } catch(e) {}
   }
@@ -14557,6 +14686,7 @@ async function loadLatestDpdsResultFromSupabase() {
 
   if (data.state && typeof STATE !== 'undefined') {
     Object.assign(STATE, data.state);
+    if (STATE.startMonthOverride == null || Number(STATE.startMonthOverride) === 5) STATE.startMonthOverride = 8;
   }
 
   if (typeof recomputeAndRefresh === 'function') {
@@ -14651,7 +14781,10 @@ async function loadDpdsLatestFromSupabaseButton() {
     }
 
     if (data.result && data.result.data && typeof DATA !== 'undefined') Object.assign(DATA, data.result.data);
-    if (data.state && typeof STATE !== 'undefined') Object.assign(STATE, data.state);
+    if (data.state && typeof STATE !== 'undefined') {
+      Object.assign(STATE, data.state);
+      if (STATE.startMonthOverride == null || Number(STATE.startMonthOverride) === 5) STATE.startMonthOverride = 8;
+    }
 
     if (typeof recomputeAndRefresh === 'function') recomputeAndRefresh();
     if (typeof save === 'function') save();
