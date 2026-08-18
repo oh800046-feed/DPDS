@@ -5261,6 +5261,19 @@ function buildScheduleMonths(startMonth, rounds) {
   return months;
 }
 
+function _buildScheduleRowsWithinYear(totalAmt, startMonth, maxPerRound) {
+  const start = Math.max(1, Math.min(12, parseInt(startMonth, 10) || 1));
+  const amounts = splitAmountByRule(Number(totalAmt || 0), maxPerRound);
+  if (!amounts.length) return [];
+  const months = buildScheduleMonths(start, amounts.length);
+  const rows = [];
+  for (let i = 0; i < amounts.length; i++) {
+    if (months[i] > 12) break;
+    rows.push({ round: rows.length + 1, month: months[i], amt: amounts[i] });
+  }
+  return rows.length ? rows : [{ round: 1, month: start, amt: amounts[0] }];
+}
+
 function _getConfiguredStartMonth() {
   const manual = parseInt(STATE.startMonthOverride, 10);
   if (manual >= 1 && manual <= 12) return manual === 5 ? 8 : manual;
@@ -5283,9 +5296,10 @@ function _getEffectiveStartMonth() {
 }
 
 function _getScheduleEffectiveRatio(amount, startMonth, cat) {
-  const split = splitAmountByRule(Number(amount || 0), _getMaxPerRound(cat));
-  if (!split.length) return 1;
-  const months = buildScheduleMonths(startMonth || _getEffectiveStartMonth(), split.length).map(m => Math.min(12, m));
+  const rows = _buildScheduleRowsWithinYear(Number(amount || 0), startMonth || _getEffectiveStartMonth(), _getMaxPerRound(cat));
+  if (!rows.length) return 1;
+  const split = rows.map(r => Number(r.amt) || 0);
+  const months = rows.map(r => r.month);
   const total = split.reduce((s, v) => s + (Number(v) || 0), 0);
   if (Math.abs(total) < 0.0001) return 1;
   const bundle = (typeof _getOpDataBundle === 'function') ? _getOpDataBundle(cat || '전체') : null;
@@ -6121,15 +6135,27 @@ function compute() {
 
   const scopeWeight = [0.20, 0.60, 1.00, 1.10, 1.30][scopeLv - 1];
 
+  // === 최초 인상 가능 월: 실적이 있으면 currentMonth + 2가 하한 ===
+  // 예) 4월 실적이 5월에 마감되어 나오면 5월 인상은 사실상 불가, 6월부터 가능 (4 + 2 = 6)
+  // 데이터 미입력 시에는 기존 timing 슬라이더 값 사용
+  const baseTimingMonth = _getConfiguredStartMonth();  // 직접 입력값 우선, 없으면 기존 timing 축 기준
+  const dataFloorMonth = (DATA.loaded && DATA.currentMonth > 0)
+    ? DATA.currentMonth + 2
+    : 0;  // 데이터 없으면 floor 없음
+  const startMonth = Math.min(12, Math.max(baseTimingMonth, dataFloorMonth));
+
   // === 룰 기반 회차 산출 ===
   // resistV: 0=자동(룰), 1=1회 강제, 2/3/4=강제 회차
   // 수기 schedule이 있으면 수기 우선
   let scheduleAmounts;  // 회차별 금액 [20, 5]
+  let scheduleMonths;
   if (STATE.manualSchedule && Array.isArray(STATE.manualSchedule) && STATE.manualSchedule.length > 0) {
     scheduleAmounts = STATE.manualSchedule.map(s => s.amt || 0);
   } else if (resistV === 0) {
     // 자동: 룰에 따라 분할 (큰 것 먼저)
-    scheduleAmounts = splitAmountByRule(amt, _getMaxPerRound());
+    const rows = _buildScheduleRowsWithinYear(amt, startMonth, _getMaxPerRound());
+    scheduleAmounts = rows.map(r => r.amt || 0);
+    scheduleMonths = rows.map(r => r.month);
   } else if (resistV === 1) {
     // 1회 강제 (룰 위반 시 어쩔 수 없이 1회)
     scheduleAmounts = [amt];
@@ -6142,18 +6168,23 @@ function compute() {
     const sum = scheduleAmounts.reduce((s, v) => s + v, 0);
     scheduleAmounts[n - 1] += Math.round((amt - sum) * 10) / 10;
   }
+  if (!scheduleMonths) {
+    scheduleMonths = STATE.manualSchedule
+      ? STATE.manualSchedule.map(s => Math.max(1, Math.min(12, parseInt(s.month, 10) || startMonth)))
+      : buildScheduleMonths(startMonth, scheduleAmounts.length);
+  }
+  if (!STATE.manualSchedule) {
+    const inYearRows = scheduleAmounts
+      .map((amt, i) => ({ amt, month: scheduleMonths[i] }))
+      .filter(row => row.month <= 12);
+    if (inYearRows.length && inYearRows.length < scheduleAmounts.length) {
+      scheduleAmounts = inYearRows.map(r => r.amt);
+      scheduleMonths = inYearRows.map(r => r.month);
+    }
+  }
   const rounds = scheduleAmounts.length;
-  // === 최초 인상 가능 월: 실적이 있으면 currentMonth + 2가 하한 ===
-  // 예) 4월 실적이 5월에 마감되어 나오면 5월 인상은 사실상 불가, 6월부터 가능 (4 + 2 = 6)
-  // 데이터 미입력 시에는 기존 timing 슬라이더 값 사용
-  const baseTimingMonth = _getConfiguredStartMonth();  // 직접 입력값 우선, 없으면 기존 timing 축 기준
-  const dataFloorMonth = (DATA.loaded && DATA.currentMonth > 0)
-    ? DATA.currentMonth + 2
-    : 0;  // 데이터 없으면 floor 없음
-  const startMonth = Math.min(12, Math.max(baseTimingMonth, dataFloorMonth));
-  const scheduleMonths = STATE.manualSchedule
-    ? STATE.manualSchedule.map(s => s.month)
-    : buildScheduleMonths(startMonth, rounds);  // 1차=startMonth, 2차=startMonth+2
+  const signedTotalScheduleAmt = scheduleAmounts.reduce((s, v) => s + (Number(v) || 0), 0);
+  const appliedAmt = Math.abs(signedTotalScheduleAmt) > 0.0001 ? signedTotalScheduleAmt : amt;
 
   // 룰 위반 검사 (정보용)
   const ruleViolations = [];
@@ -6165,18 +6196,17 @@ function compute() {
     if (_isRoundIntervalRuleEnabled() && gap < PRICING_RULES.ROUND_INTERVAL) ruleViolations.push(`${i+1}차 시점 ${gap}개월 간격 (룰 ${PRICING_RULES.ROUND_INTERVAL}개월 미달)`);
   }
 
-  const efficiency = rounds > 0 ? amt / rounds : amt;
-  const absAmt = Math.abs(amt);
-  const signedTotalScheduleAmt = scheduleAmounts.reduce((s, v) => s + (Number(v) || 0), 0);
+  const efficiency = rounds > 0 ? appliedAmt / rounds : appliedAmt;
+  const absAmt = Math.abs(appliedAmt);
 
   // 거래처 이탈률
-  const positiveAmtForChurn = Math.max(0, amt);
+  const positiveAmtForChurn = Math.max(0, appliedAmt);
   const baseChurn = (positiveAmtForChurn / 28) * 4.0;
   const roundsAdj = (rounds === 1) ? 0.7 : (rounds >= 3) ? -0.4 : 0;
   const commAdj = (commLv >= 3) ? -0.5 : (commLv === 1) ? 0.8 : 0;
-  let churn = amt < 0 ? Math.max(0.3, Math.min(3.0, 0.6 + roundsAdj * 0.2 + commAdj * 0.2)) : Math.max(0.5, Math.min(8.0, baseChurn + roundsAdj + commAdj));
+  let churn = appliedAmt < 0 ? Math.max(0.3, Math.min(3.0, 0.6 + roundsAdj * 0.2 + commAdj * 0.2)) : Math.max(0.5, Math.min(8.0, baseChurn + roundsAdj + commAdj));
   if (typeof _calcChurnWithHistory === 'function') {
-    churn = _calcChurnWithHistory({ amt, rounds, commLv, defaultChurn: churn, baseChurn, roundsAdj, commAdj });
+    churn = _calcChurnWithHistory({ amt: appliedAmt, rounds, commLv, defaultChurn: churn, baseChurn, roundsAdj, commAdj });
   }
 
   // 베이스라인 — v38: _getOpDataBundle('전체')로 통일하여 시나리오 역산과 동일 기준 보장
@@ -6236,7 +6266,7 @@ function compute() {
   const opGapOku = Math.max(0, targetOpOku - outlookOpOku);  // 목표−전망 격차(정보용)
 
   return {
-    amt, rounds, scopeWeight, efficiency, churn,
+    amt: appliedAmt, requestedAmt: amt, rounds, scopeWeight, efficiency, churn,
     scheduleAmounts,    // [20, 5] — 회차별 금액
     scheduleMonths,     // [5, 7]  — 회차별 월
     ruleViolations,     // [] 또는 위반 사유
@@ -8759,6 +8789,18 @@ function _computeScenarioPreview(amtOverride) {
   return r;
 }
 
+function _getScenarioPreviewAppliedAmount(targetPct) {
+  const solved = _solvePricingAmountsForLevel('cat', targetPct);
+  const savedLevel = STATE.pricingGroupLevel;
+  STATE.pricingGroupLevel = 'cat';
+  try {
+    const avg = _avgFromCatAmounts(solved);
+    return Number.isFinite(avg) ? avg : 0;
+  } finally {
+    STATE.pricingGroupLevel = savedLevel;
+  }
+}
+
 function _hasUploadedScenarioData() {
   return !!(
     typeof DATA !== 'undefined' &&
@@ -8811,7 +8853,10 @@ function _getScenarioPreviewSet() {
     return keys.map(key => {
       const targetPct = SCENARIO_ACH_TARGETS[key];
       const solved = _solveAmountForAchievement(targetPct);
-      const result = _computeScenarioPreview(solved.amt);
+      const appliedAmt = _getScenarioPreviewAppliedAmount(targetPct);
+      const result = _computeScenarioPreview(appliedAmt);
+      solved.requiredAmt = solved.amt;
+      solved.appliedAmt = appliedAmt;
       return { key, index: idx[key], targetPct, solved, result };
     });
   } catch(e) {
@@ -10657,9 +10702,7 @@ function _normalizeScheduleRows(rows, cat, keepZeroRows = false) {
 }
 
 function _buildScheduleRowsForAmount(amount, startMonth, cat) {
-  const amounts = splitAmountByRule(Number(amount || 0), _getMaxPerRound(cat));
-  const months = buildScheduleMonths(startMonth || 8, amounts.length);
-  return amounts.map((a, i) => ({ round: i + 1, month: months[i], amt: a }));
+  return _buildScheduleRowsWithinYear(Number(amount || 0), startMonth || 8, _getMaxPerRound(cat));
 }
 
 function _getScheduleForFinal(cat = '전체') {
