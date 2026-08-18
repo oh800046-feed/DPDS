@@ -5277,6 +5277,41 @@ function _applyStartMonthToScheduleRows(rows, startMonth) {
   return rows;
 }
 
+function _getEffectiveStartMonth() {
+  const dataFloor = (DATA.loaded && DATA.currentMonth > 0) ? DATA.currentMonth + 2 : 1;
+  return Math.min(12, Math.max(_getConfiguredStartMonth(), dataFloor));
+}
+
+function _getScheduleEffectiveRatio(amount, startMonth, cat) {
+  const split = splitAmountByRule(Number(amount || 0), _getMaxPerRound(cat));
+  if (!split.length) return 1;
+  const months = buildScheduleMonths(startMonth || _getEffectiveStartMonth(), split.length).map(m => Math.min(12, m));
+  const total = split.reduce((s, v) => s + (Number(v) || 0), 0);
+  if (Math.abs(total) < 0.0001) return 1;
+  const bundle = (typeof _getOpDataBundle === 'function') ? _getOpDataBundle(cat || '전체') : null;
+  const monthlyQty = Array.isArray(bundle?.qtyNonLinkedMonthly) && bundle.qtyNonLinkedMonthly.some(v => Math.abs(Number(v) || 0) > 0.0001)
+    ? bundle.qtyNonLinkedMonthly
+    : (Array.isArray(bundle?.qtyMonthly) ? bundle.qtyMonthly : null);
+  const totalQty = monthlyQty ? monthlyQty.reduce((s, v) => s + Math.max(0, Number(v) || 0), 0) : 0;
+  if (totalQty > 0) {
+    let weighted = 0;
+    for (let m = 1; m <= 12; m++) {
+      let cum = 0;
+      split.forEach((v, i) => { if (m >= months[i]) cum += Number(v) || 0; });
+      const ratio = Math.max(0, Math.min(1, cum / total));
+      weighted += Math.max(0, Number(monthlyQty[m - 1]) || 0) * ratio;
+    }
+    return Math.max(weighted / totalQty, 0.0001);
+  }
+  let acc = 0;
+  for (let m = 1; m <= 12; m++) {
+    let cum = 0;
+    split.forEach((v, i) => { if (m >= months[i]) cum += Number(v) || 0; });
+    acc += Math.max(0, Math.min(1, cum / total));
+  }
+  return Math.max(acc / 12, 0.0001);
+}
+
 function _clonePlain(obj) {
   return obj == null ? obj : JSON.parse(JSON.stringify(obj));
 }
@@ -5320,6 +5355,43 @@ function _getCachedPricingLevelAmounts(level) {
 function _setCachedPricingLevelAmounts(level, amounts) {
   _ensurePricingLevelAmountCache();
   STATE.catManualAmountsByLevel[level] = _clonePlain(amounts);
+}
+
+function _getActivePricingScenarioTarget() {
+  const scenarioTarget = SCENARIO_ACH_TARGETS[STATE.scenario];
+  if (scenarioTarget != null) return scenarioTarget;
+  const storedTarget = Number(STATE.pricingScenarioTarget);
+  return Number.isFinite(storedTarget) && storedTarget > 0 ? storedTarget : null;
+}
+
+function _recalculateScenarioPricingAmounts(targetPct) {
+  if (targetPct == null || !(DATA.loaded && DATA.agg)) return false;
+  STATE.pricingScenarioTarget = targetPct;
+  STATE.manualSchedule = null;
+  STATE.catSchedules = {};
+
+  const catSolved = _solvePricingAmountsForLevel('cat', targetPct);
+  const midShape = _solvePricingAmountsForLevel('mid', targetPct);
+  const midSolved = _convertPricingAmountsPreservingTotal('cat', 'mid', catSolved, midShape);
+  _setCachedPricingLevelAmounts('cat', catSolved);
+  _setCachedPricingLevelAmounts('mid', midSolved);
+  STATE.catManualAmounts = _getCachedPricingLevelAmounts(_getPricingGroupLevel());
+  _applyCatExclusionsToState();
+
+  const avgAmt = _avgFromCatAmounts(STATE.catManualAmounts);
+  if (Number.isFinite(avgAmt)) {
+    STATE.amountOverride = Math.round(avgAmt);
+    let bestIdx = 0, bestDiff = Infinity;
+    AXES.amount.levels.forEach((lv, i) => {
+      const d = Math.abs(lv.v - STATE.amountOverride);
+      if (d < bestDiff) { bestDiff = d; bestIdx = i; }
+    });
+    STATE.axes.amount = bestIdx;
+  } else {
+    const solved = _solveAmountForAchievement(targetPct);
+    STATE.amountOverride = solved.amt;
+  }
+  return true;
 }
 
 let _pricingGroupDataWaitTimer = null;
@@ -5974,8 +6046,14 @@ function _solveAmountForAchievement(targetAchPct) {
   const targetOpAtPct = planOku * (targetAchPct / 100);
   // 전망에서 추가로 끌어올려야 할 OP (억). 이미 전망이 더 높으면 0.
   const needAddOku = Math.max(0, targetOpAtPct - outlookOku);
-  // 필요 평균 조정폭(원/kg) = 추가 OP(원) ÷ (비연동 물량 × 환원율)
-  const amt = (qtyNL > 0 && recovery > 0) ? (needAddOku * 1e8) / (qtyNL * recovery) : 0;
+  // 필요 평균 조정폭(원/kg) = 추가 OP(원) ÷ (비연동 물량 × 환원율 × 적용월 물량비중)
+  const baseAmt = (qtyNL > 0 && recovery > 0) ? (needAddOku * 1e8) / (qtyNL * recovery) : 0;
+  let amt = baseAmt;
+  const startMonth = (typeof _getEffectiveStartMonth === 'function') ? _getEffectiveStartMonth() : 8;
+  for (let i = 0; i < 4; i++) {
+    const effRatio = (typeof _getScheduleEffectiveRatio === 'function') ? _getScheduleEffectiveRatio(amt, startMonth, '전체') : 1;
+    amt = effRatio > 0 ? baseAmt / effRatio : baseAmt;
+  }
   return {
     amt: Math.round(amt),
     needAddOku,
@@ -5999,29 +6077,7 @@ function _solveCatAmountsForAchievement(targetAchPct) {
   const groups = (typeof _getPricingGroups === 'function')
     ? _getPricingGroups()
     : ((typeof _getDpdsCats === 'function') ? _getDpdsCats() : ['양계','양돈','축우','양어']).map(cat => ({ key: cat, cat }));
-  // v44: 회차 적용 시점에 따른 '연중 유효 비율' 산출
-  //   인상이 7월부터 적용되면 연간 효과의 일부(7~12월분)만 OP에 반영되므로,
-  //   목표 달성에 필요한 조정폭을 그 비율의 역수만큼 키워야 한다.
-  //   유효비율 = Σ(월별 누적적용비율)/12  (전체 탭 스케줄 기준)
-  let effRatio = 1;
-  try {
-    const sch = (typeof _getScheduleForFinal === 'function') ? _getScheduleForFinal('전체') : null;
-    if (sch && sch.scheduleAmounts && sch.scheduleAmounts.length) {
-      const totalAmt = sch.scheduleAmounts.reduce((s, v) => s + (v || 0), 0);
-      if (Math.abs(totalAmt) > 0.0001) {
-        let acc = 0;
-        for (let m = 1; m <= 12; m++) {
-          let cum = 0;
-          for (let i = 0; i < sch.scheduleAmounts.length; i++) {
-            if (m >= sch.scheduleMonths[i]) cum += sch.scheduleAmounts[i] || 0;
-          }
-          acc += Math.max(0, Math.min(1, cum / totalAmt));
-        }
-        effRatio = acc / 12;
-      }
-    }
-  } catch(e) {}
-  if (!(effRatio > 0.05)) effRatio = 1;  // 안전장치 (너무 작으면 1로)
+  const startMonth = (typeof _getEffectiveStartMonth === 'function') ? _getEffectiveStartMonth() : 8;
 
   const result = {};
   groups.forEach(group => {
@@ -6035,8 +6091,13 @@ function _solveCatAmountsForAchievement(targetAchPct) {
     // 이 축종의 목표% 달성에 필요한 추가 OP(억)
     const targetAtPct = planOku * (targetAchPct / 100);
     const needAddOku = Math.max(0, targetAtPct - outlookOku);
-    // 연간 풀 효과 기준 필요 조정폭을 유효비율로 나눠 '실제 회차 적용' 보정
-    let amt = (qNL > 0 && recovery > 0) ? (needAddOku * 1e8) / (qNL * recovery * effRatio) : 0;
+    // 전체 물량 기준 필요 조정폭을 적용월별 물량비중으로 나눠 실제 회차 적용을 보정
+    const baseAmt = (qNL > 0 && recovery > 0) ? (needAddOku * 1e8) / (qNL * recovery) : 0;
+    let amt = baseAmt;
+    for (let i = 0; i < 4; i++) {
+      const effRatio = _getScheduleEffectiveRatio(amt, startMonth, key);
+      amt = effRatio > 0 ? baseAmt / effRatio : baseAmt;
+    }
     // 회차당 최대 조정폭 상한으로 클램프 (양어 500, 그 외 100)
     const cap = (parentCat === '양어') ? 500 : 100;
     amt = Math.min(amt, cap);
@@ -6146,26 +6207,22 @@ function compute() {
   recoveryRate = _getRecoveryRate();
 
   // === 월별 OP 산출: 누적 적용 (1차 시작월부터 1차분, 2차 시작월부터 1차+2차분 ...) ===
-  // v38 핵심: 판가 추가 OP는 의사결정 보드와 동일하게 '비연동 물량 × 환원율' 기준으로 산출
-  //   (이전: amt × 전체물량 × scopeWeight × 0.80 → 보드와 불일치하여 OP·달성률 차이 발생)
-  const opLiftAnnualWon = amt * qtyNonLinkedKg * recoveryRate;
-  const opLiftAnnual = opLiftAnnualWon / 1e8;   // 연간 풀 적용 시 추가 OP(억)
-  const monthlyOp = [];
-  for (let m = 1; m <= 12; m++) {
-    // 이 월에 누적 적용된 조정폭 비율 산출 (월별 추이 그래프용)
-    let cumAmt = 0;
-    for (let r = 0; r < scheduleAmounts.length; r++) {
-      if (m >= scheduleMonths[r]) cumAmt += scheduleAmounts[r];
-    }
-    const ratio = Math.abs(signedTotalScheduleAmt) > 0.0001 ? cumAmt / signedTotalScheduleAmt : 0;
-    // 전망 OP 베이스 + 인상에 따른 추가 OP (누적 비율 반영)
-    monthlyOp.push((outlookOpOku / 12) + (opLiftAnnual / 12) * ratio);
-  }
-  // v38: 연간 예상 OP·달성률은 '연간 풀 적용' 기준으로 산출하여 시나리오 역산값과 일치시킨다.
-  //   (월별 그래프는 위 monthlyOp의 누적 적용을 그대로 사용 — 적용 시점 시각화 유지)
-  const opAddAnnual = opLiftAnnual;                       // 인상에 따른 추가 OP(억, 연간 기준)
+  // v45: 엑셀 실행계획처럼 월별 비연동 물량에 해당월 누적 조정폭을 직접 곱한다.
+  const pricingBundle = _bundle || {
+    qty: annualVolKg,
+    qtyNonLinked: qtyNonLinkedKg,
+    qtyMonthly: Array(12).fill((annualVolKg || 0) / 12),
+    qtyNonLinkedMonthly: Array(12).fill((qtyNonLinkedKg || 0) / 12),
+    outlookMonthly: Array(12).fill(outlookOpOku / 12)
+  };
+  const lift = _calcScheduledPriceLift(pricingBundle, scheduleAmounts, scheduleMonths, recoveryRate);
+  const outlookMonthlyBase = Array.isArray(pricingBundle.outlookMonthly) && pricingBundle.outlookMonthly.length
+    ? pricingBundle.outlookMonthly
+    : Array(12).fill(outlookOpOku / 12);
+  const monthlyOp = outlookMonthlyBase.map((v, i) => (Number(v) || 0) + (lift.monthlyLiftOku[i] || 0));
+  const opAddAnnual = lift.totalWon / 1e8;                 // 실제 적용월 기준 추가 OP(억)
   const opAnnual = outlookOpOku + opAddAnnual;            // 예상 OP(인상 후) = 전망 + 인상효과
-  const revAnnualWon = amt * qtyNonLinkedKg;
+  const revAnnualWon = _calcScheduledPriceLift(pricingBundle, scheduleAmounts, scheduleMonths, 1).totalWon;
   const revAnnual = revAnnualWon / 1e8;
 
   // 종합 점수
@@ -6616,16 +6673,18 @@ function renderAxes() {
 
 function setAxis(key, val) {
   STATE.axes[key] = parseInt(val);
-  STATE.scenario = 'custom';
+  const activeTarget = _getActivePricingScenarioTarget();
+  if (key !== 'timing' || activeTarget == null) STATE.scenario = 'custom';
   // 슬라이더 직접 조작 시 시나리오 역산 조정폭 해제 — 사용자 수기값 우선
   if (key === 'amount') STATE.amountOverride = null;
-  // 최초 적용 시기는 금액 재산출 없이 회차 월만 바꾼다.
+  // 최초 적용 시기는 목표율 기준 조정폭을 다시 역산한다. 목표율이 없으면 회차 월만 바꾼다.
   if (key === 'timing') {
     STATE.startMonthOverride = _getConfiguredStartMonth();
-    const dataFloor = (DATA.loaded && DATA.currentMonth > 0) ? DATA.currentMonth + 2 : 1;
-    const startMonth = Math.min(12, Math.max(STATE.startMonthOverride, dataFloor));
-    if (STATE.manualSchedule) _applyStartMonthToScheduleRows(STATE.manualSchedule, startMonth);
-    Object.keys(STATE.catSchedules || {}).forEach(cat => _applyStartMonthToScheduleRows(STATE.catSchedules[cat], startMonth));
+    if (!_recalculateScenarioPricingAmounts(activeTarget)) {
+      const startMonth = _getEffectiveStartMonth();
+      if (STATE.manualSchedule) _applyStartMonthToScheduleRows(STATE.manualSchedule, startMonth);
+      Object.keys(STATE.catSchedules || {}).forEach(cat => _applyStartMonthToScheduleRows(STATE.catSchedules[cat], startMonth));
+    }
   }
   _saveCurrentPricingLevelAmounts();
   const pricingSnap = _snapshotPricingState();
@@ -6644,26 +6703,29 @@ function setStartMonth(val) {
   let month = parseInt(val, 10);
   if (!Number.isFinite(month)) month = prev;
   month = Math.max(1, Math.min(12, month));
+  const activeTarget = _getActivePricingScenarioTarget();
   STATE.startMonthOverride = month;
-  STATE.scenario = 'custom';
-  const dataFloor = (DATA.loaded && DATA.currentMonth > 0) ? DATA.currentMonth + 2 : 1;
-  const startMonth = Math.min(12, Math.max(month, dataFloor));
+  if (activeTarget == null) STATE.scenario = 'custom';
 
-  // 금액은 보존하고 회차 월만 새 시작월 기준으로 재배치
-  if (STATE.manualSchedule) _applyStartMonthToScheduleRows(STATE.manualSchedule, startMonth);
-  Object.keys(STATE.catSchedules || {}).forEach(cat => _applyStartMonthToScheduleRows(STATE.catSchedules[cat], startMonth));
-  const preserved = _snapshotPricingState();
+  const recalculated = _recalculateScenarioPricingAmounts(activeTarget);
+  if (!recalculated) {
+    const startMonth = _getEffectiveStartMonth();
+    if (STATE.manualSchedule) _applyStartMonthToScheduleRows(STATE.manualSchedule, startMonth);
+    Object.keys(STATE.catSchedules || {}).forEach(cat => _applyStartMonthToScheduleRows(STATE.catSchedules[cat], startMonth));
+  }
 
   renderAxes();
   renderImpact();
   renderWorkflow();
+  renderDecisionCharts();
   renderBoardBanner();
-
-  _restorePricingState(preserved);
   renderManualCatInputs();
   renderRoundSchedulePolicy();
   recalcManualOpEstimate();
   _renderFinalCharts();
+  if (typeof renderScenarioCards === 'function') { try { renderScenarioCards(); } catch(e) {} }
+  if (typeof renderScenarioChart === 'function') { try { renderScenarioChart(); } catch(e) {} }
+  if (typeof renderScenariosMonthly === 'function') { try { renderScenariosMonthly(); } catch(e) {} }
   save();
 }
 
@@ -9381,8 +9443,9 @@ function _updateMode1Display() {
   }
   // 환산: 평균 조정폭으로부터 예상 OP 산출
   const recovery = parseFloat(document.getElementById('revRecovery')?.value || 80) / 100;
-  const totalQty = DATA.agg.outlook.byMetric.qty?.total || 0;
-  const outlookOp = (DATA.agg.outlook.byMetric.op?.total || 0) / 1e8;
+  const bundle = _getOpDataBundle('전체');
+  const totalQty = bundle.qtyNonLinked || bundle.qty || 0;
+  const outlookOp = bundle.outlookTotalOku || 0;
   if (!(totalQty > 0)) {
     if (result) {
       result.textContent = '산출전';
@@ -9391,7 +9454,9 @@ function _updateMode1Display() {
     if (detail) detail.textContent = '전망 판매량 업로드 후 표시됩니다.';
     return;
   }
-  const expectedOp = (avgAmt * totalQty * recovery) / 1e8 + outlookOp;
+  const rows = _buildScheduleRowsForAmount(avgAmt, _getEffectiveStartMonth(), '전체');
+  const lift = _calcScheduledPriceLift(bundle, rows.map(x => x.amt), rows.map(x => x.month), recovery);
+  const expectedOp = outlookOp + (lift.totalWon / 1e8);
 
   if (result) {
     result.innerHTML = `${_fmtSignedWon(avgAmt, 1, '')}<span style="font-size: 12px; color: var(--ink-3);"> 원/kg</span>`;
@@ -9399,7 +9464,7 @@ function _updateMode1Display() {
   }
   if (detail) {
     const volMt = totalQty / 1e6;
-    detail.innerHTML = `${label}<br><span style="font-size: 9.5px;">전망 ${volMt.toFixed(0)}천톤 × 환원율 ${(recovery*100).toFixed(0)}% → 예상 OP ${expectedOp.toFixed(1)}억</span>`;
+    detail.innerHTML = `${label}<br><span style="font-size: 9.5px;">비연동 전망 ${volMt.toFixed(0)}천톤 × 적용월 물량 × 환원율 ${(recovery*100).toFixed(0)}% → 예상 OP ${expectedOp.toFixed(1)}억</span>`;
   }
   // 목표 OP 입력값을 역으로 권장값 표시 (참고용)
   if (targetEl && !targetEl.dataset.userEdited) {
@@ -9429,7 +9494,8 @@ function _syncFromMode1ToMode23() {
   const targetOp = parseFloat(targetEl?.value || '');
   const recovery = parseFloat(document.getElementById('revRecovery')?.value || 80) / 100;
   const outlookOp = (DATA.agg.outlook.byMetric.op?.total || 0) / 1e8;
-  const totalQty = DATA.agg.outlook.byMetric.qty?.total || 0;
+  const bundle = _getOpDataBundle('전체');
+  const totalQty = bundle.qtyNonLinked || bundle.qty || 0;
   if (!Number.isFinite(targetOp) || !(totalQty > 0)) {
     if (result) {
       result.textContent = '산출전';
@@ -9439,7 +9505,13 @@ function _syncFromMode1ToMode23() {
     return;
   }
   const opGapWon = (targetOp - outlookOp) * 1e8;
-  let requiredAmt = totalQty > 0 && recovery > 0 ? opGapWon / (totalQty * recovery) : 0;
+  const baseRequiredAmt = totalQty > 0 && recovery > 0 ? opGapWon / (totalQty * recovery) : 0;
+  let requiredAmt = baseRequiredAmt;
+  const startMonth = _getEffectiveStartMonth();
+  for (let i = 0; i < 4; i++) {
+    const effRatio = _getScheduleEffectiveRatio(requiredAmt, startMonth, '전체');
+    requiredAmt = effRatio > 0 ? baseRequiredAmt / effRatio : baseRequiredAmt;
+  }
   // 목표 대비 초과 손익이면 음수 조정폭(가격 인하 여력)으로 표시
   if (!isFinite(requiredAmt)) requiredAmt = 0;
 
@@ -9450,7 +9522,7 @@ function _syncFromMode1ToMode23() {
   }
   if (detail) {
     const volMt = totalQty / 1e6;
-    detail.innerHTML = `목표 ${targetOp}억 · 전망 ${outlookOp.toFixed(0)}억 · OP 격차 ${(targetOp - outlookOp).toFixed(1)}억 · 전망 ${volMt.toFixed(0)}천톤 × 환원율 ${(recovery*100).toFixed(0)}%`;
+    detail.innerHTML = `목표 ${targetOp}억 · 전망 ${outlookOp.toFixed(0)}억 · OP 격차 ${(targetOp - outlookOp).toFixed(1)}억 · 비연동 전망 ${volMt.toFixed(0)}천톤 × 적용월 물량 × 환원율 ${(recovery*100).toFixed(0)}%`;
   }
 
   // MODE 2: 필요 평균을 축종별로 권고 비율 적용해 재배분
@@ -9621,21 +9693,8 @@ function recalcManualOpEstimate() {
   const recommended = _getCatRecommendedAmounts(r.amt);
   const amounts = _getFinalCatAmounts(r);
   const recovery = parseFloat(document.getElementById('revRecovery')?.value || 80) / 100;
-  let totalOp = 0;
-  _getPricingGroups().forEach(g => {
-    const c = g.key;
-    let qty;
-    if (_getPricingGroupLevel() === 'mid' && DATA.loaded && DATA.agg.outlook.byMid?.[c]?.metrics?.qty) {
-      qty = DATA.agg.outlook.byMid[c].metrics.qty.total;
-    } else if (DATA.loaded && DATA.agg.outlook.byCategory[g.cat]?.qty) {
-      qty = DATA.agg.outlook.byCategory[g.cat].qty.total;
-    } else {
-      qty = 0;
-    }
-    const amt = amounts[c] || 0;
-    totalOp += amt * qty * recovery; // 원
-  });
-  const totalOpOku = totalOp / 1e8;
+  const monthlyCalc = _calcAggregateFinalMonthlyOp(amounts, recovery);
+  const totalOpOku = monthlyCalc.finalTotalOku - monthlyCalc.outlookTotalOku;
   const inputTargetOp = parseFloat(document.getElementById('revTargetOp')?.value || '');
   const planTargetOp = (DATA.agg.plan?.byMetric?.op?.total || 0) / 1e8;
   const targetOp = Number.isFinite(inputTargetOp) ? inputTargetOp : planTargetOp;
@@ -10459,7 +10518,13 @@ function _getOpDataBundle(cat) {
   cat = _sanitizeDpdsCat(cat);
   let planMonthly = Array(12).fill(0), outlookMonthly = Array(12).fill(0);
   let planTotalOku = 0, outlookTotalOku = 0, qty = 0;
+  let qtyMonthly = Array(12).fill(0);
   let qtyNonLinked = 0;  // v40: 판가 적용 산식 전용 — 비연동 물량만
+  let qtyNonLinkedMonthly = Array(12).fill(0);
+  const metricMonths = (metric, fallback = null) => {
+    const src = Array.isArray(metric?.months) ? metric.months : fallback;
+    return Array.from({ length: 12 }, (_, i) => Number(src?.[i] || 0));
+  };
 
   if (DATA.loaded && DATA.agg) {
     if (cat === '전체') {
@@ -10469,9 +10534,13 @@ function _getOpDataBundle(cat) {
       if (o?.months) outlookMonthly = o.months.map(v => v / 1e8);
       planTotalOku = (p?.total || 0) / 1e8;
       outlookTotalOku = (o?.total || 0) / 1e8;
-      qty = DATA.agg.outlook?.byMetric?.qty?.total || 0;
+      const qtyMetric = DATA.agg.outlook?.byMetric?.qty;
+      qty = qtyMetric?.total || 0;
+      qtyMonthly = metricMonths(qtyMetric);
       // v40: 비연동 전망 물량 (판가 추가 OP 산출에 사용)
-      qtyNonLinked = DATA.aggNonLinked?.outlook?.byMetric?.qty?.total || qty;
+      const nlQtyMetric = DATA.aggNonLinked?.outlook?.byMetric?.qty;
+      qtyNonLinked = nlQtyMetric?.total || qty;
+      qtyNonLinkedMonthly = metricMonths(nlQtyMetric, qtyMonthly);
     } else if (String(cat).includes('|')) {
       const parentCat = _getParentCatFromGroupKey(cat);
       const groupInfo = _getPricingGroupByKey(cat);
@@ -10502,12 +10571,18 @@ function _getOpDataBundle(cat) {
       planTotalOku = (p?.total || 0) / 1e8;
       outlookTotalOku = (o?.total || 0) / 1e8;
       qty = oGroup?.qty?.total || 0;
-      qtyNonLinked = (isFishSmallGroup
-        ? mergeSmallMetrics(DATA.aggNonLinked?.outlook?.bySmall, 'qty')?.total
+      qtyMonthly = metricMonths(oGroup?.qty);
+      const nlQtyMetric = isFishSmallGroup
+        ? mergeSmallMetrics(DATA.aggNonLinked?.outlook?.bySmall, 'qty')
         : isSmallKey
-        ? DATA.aggNonLinked?.outlook?.bySmall?.[cat]?.metrics?.qty?.total
-        : DATA.aggNonLinked?.outlook?.byMid?.[cat]?.metrics?.qty?.total) || qty;
-      if (!p && !o) qtyNonLinked = 0;
+        ? DATA.aggNonLinked?.outlook?.bySmall?.[cat]?.metrics?.qty
+        : DATA.aggNonLinked?.outlook?.byMid?.[cat]?.metrics?.qty;
+      qtyNonLinked = nlQtyMetric?.total || qty;
+      qtyNonLinkedMonthly = metricMonths(nlQtyMetric, qtyMonthly);
+      if (!p && !o) {
+        qtyNonLinked = 0;
+        qtyNonLinkedMonthly = Array(12).fill(0);
+      }
     } else {
       const p = DATA.agg.plan?.byCategory?.[cat]?.op;
       const o = DATA.agg.outlook?.byCategory?.[cat]?.op;
@@ -10515,17 +10590,54 @@ function _getOpDataBundle(cat) {
       if (o?.months) outlookMonthly = o.months.map(v => v / 1e8);
       planTotalOku = (p?.total || 0) / 1e8;
       outlookTotalOku = (o?.total || 0) / 1e8;
-      qty = DATA.agg.outlook?.byCategory?.[cat]?.qty?.total || 0;
+      const qtyMetric = DATA.agg.outlook?.byCategory?.[cat]?.qty;
+      qty = qtyMetric?.total || 0;
+      qtyMonthly = metricMonths(qtyMetric);
       // v40: 해당 축종의 비연동 전망 물량
-      qtyNonLinked = DATA.aggNonLinked?.outlook?.byCategory?.[cat]?.qty?.total || qty;
-      if (!p && !o) qtyNonLinked = 0;
+      const nlQtyMetric = DATA.aggNonLinked?.outlook?.byCategory?.[cat]?.qty;
+      qtyNonLinked = nlQtyMetric?.total || qty;
+      qtyNonLinkedMonthly = metricMonths(nlQtyMetric, qtyMonthly);
+      if (!p && !o) {
+        qtyNonLinked = 0;
+        qtyNonLinkedMonthly = Array(12).fill(0);
+      }
     }
   } else {
     // 업로드 전에는 예시 월별 OP/물량을 생성하지 않는다.
   }
   // v40: 비연동 비중 계산 (사용자가 디버그용으로 확인 가능)
   const nlRatio = qty > 0 ? qtyNonLinked / qty : 1;
-  return { planMonthly, outlookMonthly, planTotalOku, outlookTotalOku, qty, qtyNonLinked, nlRatio };
+  return { planMonthly, outlookMonthly, planTotalOku, outlookTotalOku, qty, qtyMonthly, qtyNonLinked, qtyNonLinkedMonthly, nlRatio };
+}
+
+function _getBundleMonthlyQtyForPricing(bundle) {
+  if (Array.isArray(bundle?.qtyNonLinkedMonthly) && bundle.qtyNonLinkedMonthly.some(v => Math.abs(Number(v) || 0) > 0.0001)) {
+    return bundle.qtyNonLinkedMonthly.map(v => Math.max(0, Number(v) || 0));
+  }
+  if (Array.isArray(bundle?.qtyMonthly) && bundle.qtyMonthly.some(v => Math.abs(Number(v) || 0) > 0.0001)) {
+    return bundle.qtyMonthly.map(v => Math.max(0, Number(v) || 0));
+  }
+  const total = Math.max(0, Number(bundle?.qtyNonLinked || bundle?.qty || 0));
+  return Array(12).fill(total / 12);
+}
+
+function _calcScheduledPriceLift(bundle, scheduleAmounts, scheduleMonths, recovery) {
+  const qtyMonths = _getBundleMonthlyQtyForPricing(bundle);
+  const amounts = Array.isArray(scheduleAmounts) ? scheduleAmounts : [];
+  const months = Array.isArray(scheduleMonths) ? scheduleMonths : [];
+  const monthlyLiftOku = Array(12).fill(0);
+  let totalWon = 0;
+  for (let m = 1; m <= 12; m++) {
+    let cumAmt = 0;
+    for (let i = 0; i < amounts.length; i++) {
+      const month = Math.max(1, Math.min(12, parseInt(months[i], 10) || 1));
+      if (m >= month) cumAmt += Number(amounts[i]) || 0;
+    }
+    const liftWon = cumAmt * (qtyMonths[m - 1] || 0) * recovery;
+    monthlyLiftOku[m - 1] = liftWon / 1e8;
+    totalWon += liftWon;
+  }
+  return { monthlyLiftOku, totalWon, qtyMonths };
 }
 
 function _getMode3StartMonth(r) {
@@ -10601,21 +10713,16 @@ function _calcFinalMonthlyOpForCat(cat, finalCats, scheduleAmounts, scheduleMont
   // v40 핵심: 판가 추가 OP는 비연동 물량(qtyNonLinked)에만 적용
   //   - 연동 SKU는 원재료 시세에 자동 연동되어 별도 판가 조정 대상이 아님
   //   - 따라서 인상폭 × 연동 물량은 OP에 가산되면 안 됨
-  const totalAddOpWonAnnual = effectiveAmt * (bundle.qtyNonLinked || 0) * recovery;
-  const monthlyAddOpFull = totalAddOpWonAnnual / 12 / 1e8;
-
+  // v45: 엑셀 실행계획과 동일하게 '월별 비연동 물량 × 해당월 누적 조정폭'으로 계산한다.
+  //      이전 방식(연간 물량 ÷ 12)은 월별 물량 편차가 큰 중분류에서 예상 손익이 달라졌다.
+  const lift = _calcScheduledPriceLift(bundle, scheduleAmounts, scheduleMonths, recovery);
   for (let m = 1; m <= 12; m++) {
-    let cumApplied = 0;
-    for (let i = 0; i < scheduleAmounts.length; i++) {
-      if (m >= scheduleMonths[i]) cumApplied += scheduleAmounts[i] || 0;
-    }
-    const ratio = Math.abs(totalScheduleAmt) > 0.0001 ? Math.max(0, Math.min(1, cumApplied / totalScheduleAmt)) : 0;
-    finalMonthly[m - 1] = bundle.outlookMonthly[m - 1] + monthlyAddOpFull * ratio;
+    finalMonthly[m - 1] = bundle.outlookMonthly[m - 1] + (lift.monthlyLiftOku[m - 1] || 0);
   }
   const finalTotalOku = finalMonthly.reduce((s, v) => s + v, 0);
   const ach = bundle.planTotalOku > 0 ? Math.round(finalTotalOku / bundle.planTotalOku * 100) : 0;
   const gapOku = Math.max(0, bundle.planTotalOku - bundle.outlookTotalOku);
-  const expectedAddOku = totalAddOpWonAnnual / 1e8;
+  const expectedAddOku = lift.totalWon / 1e8;
   const gapAch = gapOku > 0 ? Math.round(expectedAddOku / gapOku * 100) : 100;
   return { ...bundle, finalMonthly, finalTotalOku, ach, gapOku, expectedAddOku, gapAch, effectiveAmt, baseAmt };
 }
