@@ -2539,11 +2539,23 @@ body[data-width="full"]     { --content-max: none; }
 </style>
 
 <!-- DPDS Supabase config: SUPABASE_URL / SUPABASE_ANON_KEY 값을 본인 프로젝트 값으로 바꾸세요. -->
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" onerror="window.__dpdsSupabaseCdnFailed=true;"></script>
 <script>
   window.SUPABASE_URL = 'https://ejghcmxerswoyiyxpuro.supabase.co';
   window.SUPABASE_ANON_KEY = 'sb_publishable_KcEH2eD-PcrQg642o1j4Bw_sKJLIOSv';
-  window.supabaseClient = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
+  /* v28: CDN/초기화 실패가 페이지 전체 동작을 막지 않도록 방어 (감사로그·시뮬레이터 등 로컬 기능은 정상 유지) */
+  try {
+    if (window.supabase && typeof window.supabase.createClient === 'function') {
+      window.supabaseClient = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
+      window.__dpdsSupabaseReady = true;
+    } else {
+      window.__dpdsSupabaseCdnFailed = true;
+      console.warn('[DPDS] Supabase 라이브러리 로드 실패 — 공유 저장(클라우드) 기능만 비활성화되고, 로컬 분석·감사로그는 정상 동작합니다.');
+    }
+  } catch (e) {
+    window.__dpdsSupabaseInitError = (e && e.message) || String(e);
+    console.warn('[DPDS] Supabase 초기화 실패:', window.__dpdsSupabaseInitError);
+  }
 </script>
 </head>
 
@@ -2762,8 +2774,8 @@ body[data-width="full"]     { --content-max: none; }
         <div style="display: grid; grid-template-columns: 1fr auto; gap: 24px; align-items: center;">
           <div>
             <div style="font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .14em; color: var(--gold-soft); margin-bottom: 6px;">CURRENT RECOMMENDATION</div>
-            <h3 style="font-family: var(--font-display); font-size: 22px; font-weight: 600; margin: 0 0 8px;" id="homeRecoTitle">2안 (균형 회복) · 권고</h3>
-            <p style="font-size: 13px; color: #cbd5e1; margin: 0; line-height: 1.6;" id="homeRecoDesc">평균 +18원/kg · 1회 일괄 + 사전협의(권고) · 예상 OP 102억 (달성률 90%) · 회당 효율 18.0원 · 거래처 이탈 1.8%</p>
+            <h3 style="font-family: var(--font-display); font-size: 22px; font-weight: 600; margin: 0 0 8px;" id="homeRecoTitle">업로드 데이터 기준 권고안</h3>
+            <p style="font-size: 13px; color: #cbd5e1; margin: 0; line-height: 1.6;" id="homeRecoDesc">현황 진단 업로드 후 권고 시나리오와 KPI가 자동 산출됩니다.</p>
           </div>
           <div style="display: flex; gap: 8px;">
             <button class="btn gold" onclick="goView('view-decision')">의사결정 보드 →</button>
@@ -2788,25 +2800,25 @@ body[data-width="full"]     { --content-max: none; }
       </div>
 
       <div class="grid-4" id="homeKpiGrid" style="margin-bottom: 18px; display: none;">
-        <div class="stat success-tone" data-tip="공정거래법 §40 준수 종합 점수 (0-100점). 8개 자가점검 통과율 + 자료 출처 신뢰도 기반">
+        <div class="stat success-tone" data-tip="공정거래법 §40 준수 상태. 리스크 게이트 자가점검 통과 여부와 자료 출처 신뢰도 기반">
           <div class="lbl">컴플라이언스</div>
-          <div class="val" id="homeKpiLaw">88<span class="unit">점</span></div>
-          <div class="delta up">PASS · 게이트 통과</div>
+          <div class="val" id="homeKpiLaw">산출전</div>
+          <div class="delta flat" id="homeKpiLawDelta">자가점검 기준</div>
         </div>
         <div class="stat accent" data-tip="시나리오 기반 권고 평균 조정폭 (원/kg). 자사 BOM 가중 산식으로 산출">
           <div class="lbl">평균 조정폭</div>
-          <div class="val" id="homeKpiAvg">+18<span class="unit">원/kg</span></div>
-          <div class="delta flat">권고안 기준</div>
+          <div class="val" id="homeKpiAvg">산출전</div>
+          <div class="delta flat" id="homeKpiAvgDelta">업로드 데이터 기준</div>
         </div>
         <div class="stat" data-tip="권장 시나리오 적용 시 연간 영업이익(억원) — 사업계획 대비 달성률 표시">
           <div class="lbl">예상 영업이익</div>
-          <div class="val" id="homeKpiOp">102<span class="unit">억원</span></div>
-          <div class="delta up">달성률 90%</div>
+          <div class="val" id="homeKpiOp">산출전</div>
+          <div class="delta flat" id="homeKpiOpDelta">업로드 데이터 기준</div>
         </div>
-        <div class="stat" data-tip="권장 조정 회차. 회차 최소화 정책상 1~2회 권장. 회당 효율 = 평균 조정폭 ÷ 회차수">
+        <div class="stat" data-tip="권장 조정 회차. 회차 최소화 정책과 현재 조정월 설정을 반영해 자동 산출">
           <div class="lbl">조정 회차</div>
-          <div class="val" id="homeKpiRounds">1<span class="unit">회</span></div>
-          <div class="delta up">회당 효율 18.0원</div>
+          <div class="val" id="homeKpiRounds">산출전</div>
+          <div class="delta flat" id="homeKpiRoundsDelta">자동 산출</div>
         </div>
       </div>
 
@@ -3056,41 +3068,41 @@ body[data-width="full"]     { --content-max: none; }
           <div data-tip="판매량 달성률 = 전망 판매량 / 사업계획 판매량 × 100. 사업계획 대비 얼마나 팔리고 있는지를 보여줍니다 (전망 = 실적 + 잔여월 실행계획).">
             <div class="donut">
               <canvas id="donut1"></canvas>
-              <div class="ctr"><div class="v" id="donut1V">79%</div><div class="l">달성률</div></div>
+              <div class="ctr"><div class="v" id="donut1V">산출전</div><div class="l">달성률</div></div>
             </div>
             <div style="text-align:center; margin-top:6px;">
               <div style="font-size:12px; font-weight:600;">판매량</div>
-              <div style="font-size:11px; color:var(--ink-3); font-family:var(--font-mono);">90.6 / 114.4 만톤</div>
+              <div style="font-size:11px; color:var(--ink-3); font-family:var(--font-mono);">업로드 후 표시</div>
             </div>
           </div>
           <div data-tip="순매출액 달성률 = 전망 매출 / 사업계획 매출 × 100. 단가 변동(판가 인상 효과)과 판매량 변동을 모두 반영합니다.">
             <div class="donut">
               <canvas id="donut2"></canvas>
-              <div class="ctr"><div class="v" id="donut2V">81%</div><div class="l">달성률</div></div>
+              <div class="ctr"><div class="v" id="donut2V">산출전</div><div class="l">달성률</div></div>
             </div>
             <div style="text-align:center; margin-top:6px;">
               <div style="font-size:12px; font-weight:600;">매출</div>
-              <div style="font-size:11px; color:var(--ink-3); font-family:var(--font-mono);">1,840 / 2,272 억원</div>
+              <div style="font-size:11px; color:var(--ink-3); font-family:var(--font-mono);">업로드 후 표시</div>
             </div>
           </div>
           <div data-tip="매출이익(매출총이익) = 순매출액 − (원재료비 + 제조변동비 + 제조고정비). 판가 조정 의사결정의 핵심 KPI로, 원가 변동을 흡수할 수 있는 마진 여력을 보여줍니다.">
             <div class="donut">
               <canvas id="donut3"></canvas>
-              <div class="ctr"><div class="v" id="donut3V">68%</div><div class="l">달성률</div></div>
+              <div class="ctr"><div class="v" id="donut3V">산출전</div><div class="l">달성률</div></div>
             </div>
             <div style="text-align:center; margin-top:6px;">
               <div style="font-size:12px; font-weight:600;">매출이익</div>
-              <div style="font-size:11px; color:var(--ink-3); font-family:var(--font-mono);">228 / 335 억원</div>
+              <div style="font-size:11px; color:var(--ink-3); font-family:var(--font-mono);">업로드 후 표시</div>
             </div>
           </div>
           <div data-tip="영업이익(OP) = 매출이익 − 판매변동비 − 판매고정비 − 일반관리비. 최종 수익성 지표이며, 사업계획 대비 OP 격차가 곧 판가 조정으로 회복 또는 환원해야 하는 금액입니다.">
             <div class="donut">
               <canvas id="donut4"></canvas>
-              <div class="ctr"><div class="v" id="donut4V" style="color:var(--danger);">22%</div><div class="l">달성률</div></div>
+              <div class="ctr"><div class="v" id="donut4V" style="color:var(--danger);">산출전</div><div class="l">달성률</div></div>
             </div>
             <div style="text-align:center; margin-top:6px;">
               <div style="font-size:12px; font-weight:600;">영업이익</div>
-              <div style="font-size:11px; color:var(--ink-3); font-family:var(--font-mono);">25 / 113.5 억원</div>
+              <div style="font-size:11px; color:var(--ink-3); font-family:var(--font-mono);">업로드 후 표시</div>
             </div>
           </div>
         </div>
@@ -3113,7 +3125,7 @@ body[data-width="full"]     { --content-max: none; }
           <strong style="color: var(--gold);">+/- 부호의 의미:</strong>
           <ul style="margin: 6px 0 0 22px; padding: 0; line-height: 1.8;">
             <li><strong>곡물가/환율/BDI 운임</strong>: <span style="color: var(--danger);">+ (양수) = 가격 상승 → 원가 압력 ↑</span> · <span style="color: var(--success);">− (음수) = 가격 하락 → 원가 완화</span></li>
-            <li><strong>OP 차질</strong>: <span style="color: var(--danger);">− (음수) = 사업계획 미달 (예: −78%는 사업계획 OP 대비 78% 부족)</span> · <span style="color: var(--success);">+ (양수) = 초과 달성</span></li>
+            <li><strong>OP 차질</strong>: <span style="color: var(--danger);">− (음수) = 사업계획 미달</span> · <span style="color: var(--success);">+ (양수) = 초과 달성</span></li>
             <li><strong>거래처 이탈</strong>: 이탈 시뮬레이션 결과 (양수만 사용. ±2% 미만 안전, 5% 초과 시 게이트 차단)</li>
           </ul>
           <div style="margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--line);">
@@ -3125,27 +3137,27 @@ body[data-width="full"]     { --content-max: none; }
         <div class="grid-5">
           <div class="trigger active" data-tip="CBOT 옥수수·대두 90일 변동률 (자사 BOM 가중). + = 가격 상승, - = 가격 하락">
             <div class="name">곡물가 상승</div>
-            <div class="v" id="triggerGrainVal">+7.2<small>%</small></div>
+            <div class="v" id="triggerGrainVal">대기</div>
             <div class="threshold">임계 ±5% 초과</div>
           </div>
           <div class="trigger warn" data-tip="원/달러 환율 90일 변동률 — 한국은행 ECOS 일중 평균. + = 환율 상승(원화 약세, 수입 원료 비싸짐)">
             <div class="name">환율</div>
-            <div class="v" id="triggerFxVal">+3.4<small>%</small></div>
+            <div class="v" id="triggerFxVal">대기</div>
             <div class="threshold">임계 ±3% 근접</div>
           </div>
           <div class="trigger" data-tip="발틱건화물지수 (해상운임) 90일 변동률 — 사료 원료 운송비 영향. + = 운임 상승">
             <div class="name">BDI 운임</div>
-            <div class="v" id="triggerBdiVal">+12<small>%</small></div>
+            <div class="v" id="triggerBdiVal">대기</div>
             <div class="threshold">임계 +20% 미달</div>
           </div>
-          <div class="trigger active" data-tip="전망 영업이익 vs 사업계획 영업이익. - 부호는 사업계획 미달을 의미. 예: -78% = 사업계획 OP 대비 78% 부족. 격차 ≥ 30%면 즉시 의사결정 진입">
+          <div class="trigger active" data-tip="전망 영업이익 vs 사업계획 영업이익. - 부호는 사업계획 미달을 의미. 격차가 임계 수준을 넘으면 즉시 의사결정 진입">
             <div class="name">OP 차질</div>
-            <div class="v" id="triggerOpGapVal">-78<small>%</small></div>
+            <div class="v" id="triggerOpGapVal">산출전</div>
             <div class="threshold">임계 -30% 초과</div>
           </div>
           <div class="trigger" data-tip="과거 인상 사례 기반 거래처 이탈 시뮬레이션. 양수만 사용 (이탈 자체가 음수일 수 없음). 임계 5% 초과 시 의사결정 게이트 차단">
             <div class="name">거래처 이탈</div>
-            <div class="v" id="triggerChurnVal">0.8<small>%</small></div>
+            <div class="v" id="triggerChurnVal">산출전</div>
             <div class="threshold">임계 ±2% 미달</div>
           </div>
         </div>
@@ -3380,9 +3392,7 @@ body[data-width="full"]     { --content-max: none; }
           <div style="margin-top: 12px; padding: 10px 12px; background: linear-gradient(135deg, #fefcf6 0%, #faf6e8 100%); border: 1px solid #e8d9a3; border-radius: 5px;">
             <div style="font-family: var(--font-mono); font-size: 9.5px; color: var(--gold); letter-spacing: .1em; margin-bottom: 4px;">FORMULA_LOCK_2026Q2 <span class="badge lock" style="margin-left: 4px;">SEALED</span></div>
             <div style="font-family: var(--font-mono); font-size: 11.5px; color: var(--ink-2); line-height: 1.7;">
-              <span id="pressureFormula">압력 = 옥수수(<span style="color:var(--gold);">+7.2%</span>)×0.28 + 대두(<span style="color:var(--gold);">+5.8%</span>)×0.22<br>
-              + 환율(<span style="color:var(--gold);">+3.4%</span>)×0.20 + BDI(<span style="color:var(--gold);">+12%</span>)×0.10<br>
-              = <strong style="color: var(--danger); font-size: 13px;">+6.92%</strong> · 외부 원가 압력 (90일)</span>
+              <span id="pressureFormula">시장 데이터 갱신 후 자동 계산됩니다.</span>
             </div>
           </div>
           <details style="margin-top: 10px; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px;" open>
@@ -3536,7 +3546,7 @@ body[data-width="full"]     { --content-max: none; }
 
       <!-- v39: 시나리오 역산 기준 배너 — 현황 진단의 실적+전망(목표·전망 OP) 기준임을 명시 -->
       <div id="scenarioBasisBanner" style="margin-bottom: 12px; padding: 10px 14px; background: linear-gradient(135deg, #fffbeb, var(--surface)); border: 1px solid var(--gold); border-radius: 8px; font-size: 12px; color: var(--ink-2); line-height: 1.6;">
-        <strong style="color: var(--accent);">📊 시나리오 산출 기준</strong> — <span id="scenarioBasisText">현황 진단에서 실적·전망 데이터를 업로드하면, 그 목표 OP·전망 OP를 기준으로 1안 80% · 2안 90% · 3안 100% 달성에 필요한 조정폭을 자동 역산합니다.</span>
+        <strong style="color: var(--accent);">📊 시나리오 산출 기준</strong> — <span id="scenarioBasisText">현황 진단에서 실적·전망 데이터를 업로드하면, 업로드된 목표 OP·전망 OP를 기준으로 각 안의 권고 조정폭을 자동 역산합니다.</span>
       </div>
 
       <div class="scen-grid">
@@ -3544,12 +3554,12 @@ body[data-width="full"]     { --content-max: none; }
           <div class="scen-tag">CONSERVATIVE</div>
           <h3>1안 · 전년 수준 (목표 80%)</h3>
           <div class="scen-metrics">
-            <div class="item"><div class="l">평균 조정폭</div><div class="v" id="scen1Amt">+12<span style="font-size:11px; color:var(--ink-3);"> 원/kg</span></div></div>
-            <div class="item"><div class="l">분할 회차</div><div class="v" id="scen1Rounds">2<span style="font-size:11px; color:var(--ink-3);"> 회</span></div></div>
-            <div class="item"><div class="l">예상 OP</div><div class="v" id="scen1Op">82<span style="font-size:11px; color:var(--ink-3);"> 억원</span></div></div>
-            <div class="item"><div class="l">달성률</div><div class="v" id="scen1Ach">80<span style="font-size:11px; color:var(--ink-3);">%</span></div></div>
-            <div class="item"><div class="l">회당 효율</div><div class="v" id="scen1Eff">6.0<span style="font-size:11px; color:var(--ink-3);"> 원/회</span></div></div>
-            <div class="item"><div class="l">거래처 이탈</div><div class="v" id="scen1Churn" style="color:var(--success);">1.2<span style="font-size:11px; color:var(--ink-3);">%</span></div></div>
+            <div class="item"><div class="l">평균 조정폭</div><div class="v" id="scen1Amt">산출전</div></div>
+            <div class="item"><div class="l">분할 회차</div><div class="v" id="scen1Rounds">산출전</div></div>
+            <div class="item"><div class="l">예상 OP</div><div class="v" id="scen1Op">산출전</div></div>
+            <div class="item"><div class="l">달성률</div><div class="v" id="scen1Ach">산출전</div></div>
+            <div class="item"><div class="l">회당 효율</div><div class="v" id="scen1Eff">산출전</div></div>
+            <div class="item"><div class="l">거래처 이탈</div><div class="v" id="scen1Churn" style="color:var(--success);">산출전</div></div>
           </div>
           <div class="scen-foot">전년도 수준 회복 · 단기 충격 최소화 · 점진적 회복</div>
         </div>
@@ -3559,12 +3569,12 @@ body[data-width="full"]     { --content-max: none; }
           <div class="scen-tag" style="color: var(--gold);">BALANCED</div>
           <h3>2안 · 균형 회복 (목표 90%)</h3>
           <div class="scen-metrics">
-            <div class="item"><div class="l">평균 조정폭</div><div class="v" id="scen2Amt">+18<span style="font-size:11px; color:var(--ink-3);"> 원/kg</span></div></div>
-            <div class="item"><div class="l">분할 회차</div><div class="v" id="scen2Rounds" style="color:var(--gold);">1<span style="font-size:11px; color:var(--ink-3);"> 회</span></div></div>
-            <div class="item"><div class="l">예상 OP</div><div class="v" id="scen2Op">102<span style="font-size:11px; color:var(--ink-3);"> 억원</span></div></div>
-            <div class="item"><div class="l">달성률</div><div class="v" id="scen2Ach">90<span style="font-size:11px; color:var(--ink-3);">%</span></div></div>
-            <div class="item"><div class="l">회당 효율</div><div class="v" id="scen2Eff" style="color:var(--gold);">18.0<span style="font-size:11px; color:var(--ink-3);"> 원/회</span></div></div>
-            <div class="item"><div class="l">거래처 이탈</div><div class="v" id="scen2Churn">1.8<span style="font-size:11px; color:var(--ink-3);">%</span></div></div>
+            <div class="item"><div class="l">평균 조정폭</div><div class="v" id="scen2Amt">산출전</div></div>
+            <div class="item"><div class="l">분할 회차</div><div class="v" id="scen2Rounds" style="color:var(--gold);">산출전</div></div>
+            <div class="item"><div class="l">예상 OP</div><div class="v" id="scen2Op">산출전</div></div>
+            <div class="item"><div class="l">달성률</div><div class="v" id="scen2Ach">산출전</div></div>
+            <div class="item"><div class="l">회당 효율</div><div class="v" id="scen2Eff" style="color:var(--gold);">산출전</div></div>
+            <div class="item"><div class="l">거래처 이탈</div><div class="v" id="scen2Churn">산출전</div></div>
           </div>
           <div class="scen-foot"><strong>전년도와 목표의 중간 수준</strong> · 회차 최소화 + 충분한 사전 협의 · 사업계획 90% 회복</div>
         </div>
@@ -3573,12 +3583,12 @@ body[data-width="full"]     { --content-max: none; }
           <div class="scen-tag">AGGRESSIVE</div>
           <h3>3안 · 목표 달성 (목표 100%)</h3>
           <div class="scen-metrics">
-            <div class="item"><div class="l">평균 조정폭</div><div class="v" id="scen3Amt">+23<span style="font-size:11px; color:var(--ink-3);"> 원/kg</span></div></div>
-            <div class="item"><div class="l">분할 회차</div><div class="v" id="scen3Rounds">1<span style="font-size:11px; color:var(--ink-3);"> 회</span></div></div>
-            <div class="item"><div class="l">예상 OP</div><div class="v" id="scen3Op">109<span style="font-size:11px; color:var(--ink-3);"> 억원</span></div></div>
-            <div class="item"><div class="l">달성률</div><div class="v" id="scen3Ach">100<span style="font-size:11px; color:var(--ink-3);">%</span></div></div>
-            <div class="item"><div class="l">회당 효율</div><div class="v" id="scen3Eff">23.0<span style="font-size:11px; color:var(--ink-3);"> 원/회</span></div></div>
-            <div class="item"><div class="l">거래처 이탈</div><div class="v" id="scen3Churn" style="color:var(--danger);">3.5<span style="font-size:11px; color:var(--ink-3);">%</span></div></div>
+            <div class="item"><div class="l">평균 조정폭</div><div class="v" id="scen3Amt">산출전</div></div>
+            <div class="item"><div class="l">분할 회차</div><div class="v" id="scen3Rounds">산출전</div></div>
+            <div class="item"><div class="l">예상 OP</div><div class="v" id="scen3Op">산출전</div></div>
+            <div class="item"><div class="l">달성률</div><div class="v" id="scen3Ach">산출전</div></div>
+            <div class="item"><div class="l">회당 효율</div><div class="v" id="scen3Eff">산출전</div></div>
+            <div class="item"><div class="l">거래처 이탈</div><div class="v" id="scen3Churn" style="color:var(--danger);">산출전</div></div>
           </div>
           <div class="scen-foot">사업계획 목표 100% 달성 · 거래처 충격 큼 · 사전 협의 필수</div>
         </div>
@@ -3586,15 +3596,14 @@ body[data-width="full"]     { --content-max: none; }
 
       <div class="card" style="margin-top: 16px;">
         <div class="h">
-          <h3>시나리오별 핵심 지표 비교 <span class="help-i" data-tip="3개 시나리오 × 4가지 핵심 지표 (회당 효율 · 연간 OP · 이탈률 · Spread Gap). Spread Gap = 사업계획 단가 가정(원/kg) − 시나리오 단가(원/kg). 양수=부족, 0=달성, 음수=초과">?</span></h3>
-          <span class="sub">3 SCENARIOS × 4 KPIs · Spread Gap 포함</span>
+          <h3>시나리오별 핵심 지표 비교 <span class="help-i" data-tip="업로드 데이터 기준으로 회당 효율, 예상 OP, 이탈률을 비교합니다.">?</span></h3>
+          <span class="sub">UPLOAD DATA KPIs</span>
         </div>
         <p style="font-size: 12px; color: var(--ink-3); margin: 0 0 8px; line-height: 1.6;">
-          <strong>4가지 핵심 지표 비교:</strong>
+          <strong>핵심 지표 비교:</strong>
           ① <strong style="color: var(--gold);">회당 효율 (원/회)</strong> — 1회 인상의 평균 단가 ·
           ② <strong style="color: var(--navy);">연간 OP (억)</strong> — 인상으로 회수되는 영업이익 ·
-          ③ <strong style="color: var(--red);">이탈률 (%)</strong> — 거래처 이탈 시뮬레이션 ·
-          ④ <strong style="color: #475569;">Spread Gap (원/kg)</strong> — 사업계획 단가 대비 차 (양수=부족, 0=달성, 음수=초과)
+          ③ <strong style="color: var(--red);">이탈률 (%)</strong> — 거래처 이탈 시뮬레이션
         </p>
         <div class="chart-wrap tall"><canvas id="chartScenarios"></canvas></div>
       </div>
@@ -3755,12 +3764,12 @@ body[data-width="full"]     { --content-max: none; }
           <div style="font-family: var(--font-display); font-size: 32px; color: var(--gold-soft); font-weight: 600;" id="boardScenarioNum">2안</div>
           <div>
             <div style="font-family: var(--font-mono); font-size: 10px; letter-spacing: .12em; color: var(--gold-soft); margin-bottom: 4px;">CURRENT WEIGHTS RESULT</div>
-            <div style="font-family: var(--font-display); font-size: 18px; font-weight: 600; margin-bottom: 4px;" id="boardReco">균형 회복 · 평균 +18원/kg · OP 102억 · 달성률 90%</div>
-            <div style="font-size: 12px; color: #cbd5e1;" id="boardRecoSub">1회 일괄(권고) · 회당 효율 18.0원 · 거래처 이탈 1.8% · 컴플라이언스 88점</div>
+            <div style="font-family: var(--font-display); font-size: 18px; font-weight: 600; margin-bottom: 4px;" id="boardReco">업로드 후 산출</div>
+            <div style="font-size: 12px; color: #cbd5e1;" id="boardRecoSub">현황 진단 업로드 후 권고안이 표시됩니다.</div>
           </div>
           <div style="text-align: right;">
             <div style="font-family: var(--font-mono); font-size: 10px; color: var(--gold-soft); letter-spacing: .1em;">RECOMMENDATION</div>
-            <div style="font-family: var(--font-display); font-size: 20px; color: #fff; margin-top: 4px;" id="boardRecoAvg">+18원/kg</div>
+            <div style="font-family: var(--font-display); font-size: 20px; color: #fff; margin-top: 4px;" id="boardRecoAvg">산출전</div>
           </div>
         </div>
       </div>
@@ -3793,23 +3802,23 @@ body[data-width="full"]     { --content-max: none; }
         <div class="grid-4">
           <div class="stat accent">
             <div class="lbl">평균 조정폭</div>
-            <div class="val" id="kpiAvg">+18.0<span class="unit">원/kg</span></div>
-            <div class="delta flat" id="kpiAvgD">시장 압력 50% 반영</div>
+            <div class="val" id="kpiAvg">산출전</div>
+            <div class="delta flat" id="kpiAvgD">업로드 데이터 기준</div>
           </div>
           <div class="stat">
             <div class="lbl">조정 후 OP</div>
-            <div class="val" id="kpiOp">102<span class="unit">억원</span></div>
-            <div class="delta up" id="kpiOpD">달성률 90%</div>
+            <div class="val" id="kpiOp">산출전</div>
+            <div class="delta flat" id="kpiOpD">업로드 데이터 기준</div>
           </div>
           <div class="stat" id="kpiRoundsCard">
             <div class="lbl">회당 효율 (핵심)</div>
-            <div class="val" id="kpiEff">18.0<span class="unit">원/회</span></div>
-            <div class="delta up" id="kpiEffD">1회 (5월)</div>
+            <div class="val" id="kpiEff">산출전</div>
+            <div class="delta flat" id="kpiEffD">업로드 데이터 기준</div>
           </div>
           <div class="stat">
             <div class="lbl">거래처 이탈</div>
-            <div class="val" id="kpiChurn">1.8<span class="unit">%</span></div>
-            <div class="delta flat" id="kpiChurnD">5거래처 영향</div>
+            <div class="val" id="kpiChurn">산출전</div>
+            <div class="delta flat" id="kpiChurnD">업로드 데이터 기준</div>
           </div>
         </div>
       </div>
@@ -3850,11 +3859,11 @@ body[data-width="full"]     { --content-max: none; }
         <div id="scenarioBanner" style="background: linear-gradient(90deg, #1e293b 0%, #334155 100%); color: #fff; border-radius: 6px; padding: 12px 16px; margin-bottom: 14px; display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap;">
           <div>
             <div style="font-family: var(--font-mono); font-size: 10px; color: var(--gold); letter-spacing: .12em; margin-bottom: 3px;">SELECTED SCENARIO · 5축 가중치 자동 반영</div>
-            <div id="scenarioBannerTitle" style="font-family: var(--font-display); font-size: 16px; font-weight: 600;">2안 균형 (권장) · 평균 +18원/kg · 1회 일괄 · 5월 적용</div>
+            <div id="scenarioBannerTitle" style="font-family: var(--font-display); font-size: 16px; font-weight: 600;">업로드 후 시나리오 산출</div>
           </div>
           <div id="scenarioBannerKpi" style="display: flex; gap: 14px; font-size: 11px;">
-            <div><span style="color: #94a3b8;">예상 OP</span> <strong style="color: var(--gold); font-size: 14px;">+0억</strong></div>
-            <div><span style="color: #94a3b8;">달성률</span> <strong style="color: var(--gold); font-size: 14px;">0%</strong></div>
+            <div><span style="color: #94a3b8;">예상 OP</span> <strong style="color: var(--gold); font-size: 14px;">산출전</strong></div>
+            <div><span style="color: #94a3b8;">달성률</span> <strong style="color: var(--gold); font-size: 14px;">산출전</strong></div>
           </div>
         </div>
 
@@ -3875,7 +3884,7 @@ body[data-width="full"]     { --content-max: none; }
             <h4 style="font-family: var(--font-display); font-size: 13px; font-weight: 600; margin: 0 0 10px;">목표 OP → 필요 조정폭</h4>
             <div style="display: grid; grid-template-columns: 1fr auto; gap: 6px; align-items: center; margin-bottom: 6px;">
               <label data-tip="달성하고자 하는 연간 영업이익 목표값(억원). 통상 사업계획 OP 또는 그에 준하는 자율 목표치를 입력합니다." style="font-size: 11.5px; color: var(--ink-2);">목표 OP (억)</label>
-              <input type="number" id="revTargetOp" value="113" step="1" min="0" max="500"
+              <input type="number" id="revTargetOp" placeholder="업로드 후" step="1" min="0" max="500"
                 style="width: 80px; padding: 5px 8px; border: 1px solid var(--line-2); border-radius: 4px; font-family: var(--font-mono); font-size: 12px; text-align: right; background: var(--surface); color: var(--ink);"
                 oninput="recalcReverseFromOp()">
             </div>
@@ -3887,8 +3896,8 @@ body[data-width="full"]     { --content-max: none; }
             </div>
             <div data-tip="필요 평균 조정폭 = (목표 OP − 전망 OP) × 1억 ÷ (전망 판매량 kg × 환원율). MODE 2의 축종별 가중평균이 자동으로 이 값에 반영됩니다." style="background: var(--gold-bg, #fefcf6); border-left: 3px solid var(--gold); border-radius: 5px; padding: 10px;">
               <div style="font-size: 10.5px; color: var(--ink-3); margin-bottom: 2px;">필요 평균 조정폭</div>
-              <div id="revOpResult" style="font-family: var(--font-display); font-size: 18px; font-weight: 700; color: var(--gold);">+5.5<span style="font-size: 11px; color: var(--ink-3);"> 원/kg</span></div>
-              <div id="revOpDetail" style="font-size: 10px; color: var(--ink-2); margin-top: 3px;">전망 판매량 기준</div>
+              <div id="revOpResult" style="font-family: var(--font-display); font-size: 18px; font-weight: 700; color: var(--gold);">산출전</div>
+              <div id="revOpDetail" style="font-size: 10px; color: var(--ink-2); margin-top: 3px;">업로드 후 표시</div>
             </div>
           </div>
 
@@ -4090,13 +4099,13 @@ body[data-width="full"]     { --content-max: none; }
           </div>
           <div class="stat">
             <div class="lbl">대상 거래처</div>
-            <div class="val">280<span class="unit">사</span></div>
-            <div class="delta flat">전 거래처 일괄</div>
+            <div class="val">산출전</div>
+            <div class="delta flat">대상 목록 기준</div>
           </div>
           <div class="stat accent">
             <div class="lbl">예상 매출 임팩트</div>
-            <div class="val" id="execImpact">+102<span class="unit">억원</span></div>
-            <div class="delta up">분기 누적</div>
+            <div class="val" id="execImpact">산출전</div>
+            <div class="delta flat">승인 후 산출</div>
           </div>
         </div>
 
@@ -4479,7 +4488,7 @@ body[data-width="full"]     { --content-max: none; }
               <td><strong>4</strong></td>
               <td><strong>가격결정 근거 자사 손익 중심</strong></td>
               <td style="text-align: center;"><span class="badge success">✓ 준수</span></td>
-              <td>역산 도구(통합 시뮬레이터): <strong>자사 사업계획 OP 113억</strong>에서 필요 조정폭 산출. 시장 평균·업계 마진 산식 부재.</td>
+              <td>역산 도구(통합 시뮬레이터): <strong>업로드된 자사 사업계획 OP</strong>에서 필요 조정폭 산출. 시장 평균·업계 마진 산식 부재.</td>
               <td>의사결정 보드 — 모든 KPI 정의(회당 효율/연간 OP/이탈률/Spread Gap) 자사 데이터 파생</td>
             </tr>
             <tr>
@@ -5191,18 +5200,6 @@ body[data-width="full"]     { --content-max: none; }
 /* ---------- 1. 데이터 모델 ---------- */
 
 /* === 가격 조정 룰 (사내 정책) === */
-/* === 축종별 기본 판매량·시연 데이터 (전역 상수) === */
-const DPDS_DEFAULT_MONTHLY_PLAN = [9.6, 9.1, 9.6, 10.2, 10.2, 10.2, 9.1, 8.5, 9.1, 9.6, 9.1, 9.1];  // 합계 113.4억 — 사업계획 영업이익 목표
-const DPDS_DEFAULT_MONTHLY_OUTLOOK = [9.0, 8.6, 9.0, 9.6, 9.6, 9.6, 8.6, 8.0, 8.6, 9.0, 8.6, 8.6];  // 합계 106.8억 — 전망(94% 달성)
-const DPDS_DEFAULT_CAT_QTY = { '양돈': 280e6, '양계': 180e6, '축우': 120e6, '양어': 40e6 };
-const DPDS_DEFAULT_CAT_WEIGHT = { '양돈': 0.452, '양계': 0.290, '축우': 0.194, '양어': 0.065 };
-
-/* === v35: 목표값 자가진단 기준선 (사용자 사업계획 확정값) === */
-/* 사업계획 시트 합계가 이 값과 크게 다르면 시트 파싱·합산에 오류가 있다는 신호 */
-const DPDS_TARGET_QTY_KG = 680e6;   // 68만톤 = 680,000톤 = 680,000,000kg
-const DPDS_TARGET_OP_WON = 113e8;   // 113억원
-const DPDS_TARGET_TOLERANCE = 0.03; // ±3% 이내면 일치로 판정
-
 const PRICING_RULES = {
   MAX_PER_ROUND: 40,        // 회차당 최대 조정폭 (원/kg) — 일반 축종(양계·양돈·축우) 기본값. 절대값 기준
   MAX_PER_ROUND_CAP: 100,   // 일반 축종 회차당 최대 조정폭 상한 (원/kg)
@@ -5331,11 +5328,18 @@ let _pricingGroupDataWaitCount = 0;
 function _prepareCurrentPricingLevelForRender() {
   const level = _getPricingGroupLevel();
   const midRows = DATA.loaded && DATA.agg?.outlook?.byMid;
-  if (level === 'mid' && (!midRows || !Object.keys(midRows).length)) {
+  const hasMidRows = !!(midRows && Object.keys(midRows).length);
+  if (level === 'mid' && (!DATA.loaded || !hasMidRows)) {
+    _renderPricingGroupLevelSwitch();
     const wrap = document.getElementById('catManualInputs');
-    if (wrap) wrap.innerHTML = '<div style="padding:12px 4px; color:var(--ink-3); font-size:11px;">중분류 데이터를 불러오는 중입니다.</div>';
+    if (wrap) {
+      const msg = DATA.loaded
+        ? '중분류 데이터를 찾지 못했습니다. 업로드 파일의 중분류 컬럼/값을 확인해 주세요.'
+        : '중분류 조정폭은 ERP 데이터 업로드 후 표시됩니다. 먼저 현황 진단에서 파일을 업로드해 주세요.';
+      wrap.innerHTML = `<div style="padding:12px 4px; color:var(--ink-3); font-size:11px;">${msg}</div>`;
+    }
     clearTimeout(_pricingGroupDataWaitTimer);
-    if (_pricingGroupDataWaitCount < 40) {
+    if (DATA.loaded && _pricingGroupDataWaitCount < 40) {
       _pricingGroupDataWaitCount += 1;
       _pricingGroupDataWaitTimer = setTimeout(() => {
         if (STATE.view === 'view-decision') renderDecisionCharts();
@@ -5613,7 +5617,7 @@ let STATE = {
 };
 
 /* ---------- 2. 영구 저장 ---------- */
-function save() { try { localStorage.setItem('dpds_v2_state', JSON.stringify(STATE)); } catch(e) {} }
+function save() { try { if (typeof dpdsSealAll === 'function') dpdsSealAll(); localStorage.setItem('dpds_v2_state', JSON.stringify(STATE)); } catch(e) { if (e && (e.name === 'QuotaExceededError' || e.code === 22) && typeof dpdsOnQuota === 'function') dpdsOnQuota(); } }
 /* CI 이미지 경로 */
 const CI_IMG_DATA = 'data:image/png;base64,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';
 function injectCiImages() {
@@ -5637,7 +5641,7 @@ function restore() {
   STATE.view = 'view-home';
   // 의사결정 로그·클릭/조정 로그·컴플라이언스 점검 이력은 보존 (감사로그 5년 보관 정책)
   if (!Array.isArray(STATE.decisions)) STATE.decisions = [];
-  if (STATE.decisions.length > 2000) STATE.decisions = STATE.decisions.slice(0, 2000);
+  dpdsTrimDecisions();
   if (!Array.isArray(STATE.complianceHistory)) STATE.complianceHistory = [];
   // v25: 기존 5단계 조정폭 축(0:+8,1:+12,2:+18,3:+23,4:+28)을 8단계 조정폭 축으로 1회 마이그레이션
   if (!STATE.adjustmentAxisV25) {
@@ -5809,13 +5813,16 @@ function renderCatQtyAdjustGrid() {
   if (!grid) return;
   const cats = ['양계', '양돈', '축우', '양어'];
   const icons = { '양계': '🐔', '양돈': '🐖', '축우': '🐄', '양어': '🐟' };
+  if (!(DATA.loaded && DATA.agg?.execution)) {
+    grid.innerHTML = `<div style="grid-column: 1 / -1; padding: 14px; border: 1px dashed var(--line-2); border-radius: 6px; color: var(--ink-3); font-size: 12px; text-align: center;">실행계획 업로드 후 표시됩니다.</div>`;
+    return;
+  }
   // 실행계획 베이스 물량 (단위: kg → 천 톤)
   function getExecQty(cat) {
     if (DATA.loaded && DATA.agg?.execution?.byCategory?.[cat]?.qty?.total) {
       return DATA.agg.execution.byCategory[cat].qty.total / 1e6;  // kg → 천 톤
     }
-    // 샘플/시연
-    return (DPDS_DEFAULT_CAT_QTY[cat] || 0) / 1e6;
+    return 0;
   }
   grid.innerHTML = cats.map(cat => {
     const execQty = getExecQty(cat);
@@ -5961,7 +5968,7 @@ function _solveAmountForAchievement(targetAchPct) {
     outlookOku = bundle.outlookTotalOku;
     qtyNL = bundle.qtyNonLinked || bundle.qty || 0;
   } else {
-    planOku = 113; outlookOku = 25; qtyNL = 1.5e9;
+    planOku = 0; outlookOku = 0; qtyNL = 0;
   }
   // 목표 달성 OP = 목표 × (targetAchPct/100)
   const targetOpAtPct = planOku * (targetAchPct / 100);
@@ -6116,25 +6123,25 @@ function compute() {
   let annualVolKg, annualBaseOku, targetOpOku;
   let qtyNonLinkedKg, outlookOpOku, recoveryRate;
   if (_bundle) {
-    targetOpOku = _bundle.planTotalOku || 113;
-    outlookOpOku = _bundle.outlookTotalOku || 0;
-    qtyNonLinkedKg = _bundle.qtyNonLinked || _bundle.qty || 1.5e9;
-    annualVolKg = _bundle.qty || qtyNonLinkedKg;
-    annualBaseOku = (DATA.loaded && DATA.agg) ? ((DATA.agg.outlook.byMetric.rev?.total || 1.2e12) / 1e8) : 12000;
+    targetOpOku = Number.isFinite(_bundle.planTotalOku) ? _bundle.planTotalOku : 0;
+    outlookOpOku = Number.isFinite(_bundle.outlookTotalOku) ? _bundle.outlookTotalOku : 0;
+    qtyNonLinkedKg = Number.isFinite(_bundle.qtyNonLinked) ? _bundle.qtyNonLinked : (Number.isFinite(_bundle.qty) ? _bundle.qty : 0);
+    annualVolKg = Number.isFinite(_bundle.qty) ? _bundle.qty : qtyNonLinkedKg;
+    annualBaseOku = (DATA.loaded && DATA.agg) ? ((DATA.agg.outlook.byMetric.rev?.total || 0) / 1e8) : 0;
   } else if (DATA.loaded && DATA.agg) {
     const o = DATA.agg.outlook.byMetric;
     const p = DATA.agg.plan.byMetric;
-    annualVolKg = o.qty?.total || 1.5e9;
-    annualBaseOku = (o.rev?.total || 1.2e12) / 1e8;
-    targetOpOku = (p.op?.total || 113e8) / 1e8;
+    annualVolKg = o.qty?.total || 0;
+    annualBaseOku = (o.rev?.total || 0) / 1e8;
+    targetOpOku = (p.op?.total || 0) / 1e8;
     qtyNonLinkedKg = DATA.aggNonLinked?.outlook?.byMetric?.qty?.total || annualVolKg;
     outlookOpOku = (o.op?.total || 0) / 1e8;
   } else {
-    annualVolKg = 1.5e9;
-    annualBaseOku = 12000;
-    targetOpOku = 113;
-    qtyNonLinkedKg = 1.5e9;
-    outlookOpOku = 25;
+    annualVolKg = 0;
+    annualBaseOku = 0;
+    targetOpOku = 0;
+    qtyNonLinkedKg = 0;
+    outlookOpOku = 0;
   }
   recoveryRate = _getRecoveryRate();
 
@@ -6164,11 +6171,11 @@ function compute() {
   // 종합 점수
   const efficiencyScore = Math.min(100, Math.abs(efficiency) * 4);
   const churnScore = Math.max(0, 100 - churn * 12);
-  const opScore = Math.max(0, Math.min(100, (opAnnual / Math.max(targetOpOku, 1)) * 100));
+  const opScore = targetOpOku > 0 ? Math.max(0, Math.min(100, (opAnnual / targetOpOku) * 100)) : 0;
   const overall = Math.round(efficiencyScore * 0.35 + churnScore * 0.30 + opScore * 0.35);
 
   // v38: 달성률 = 예상 OP(인상 후) ÷ 목표 OP × 100 (보드 표의 달성율과 동일 정의)
-  const achievement = targetOpOku > 0 ? Math.round(opAnnual / targetOpOku * 100) : (opAnnual >= 0 ? 100 : 0);
+  const achievement = targetOpOku > 0 ? Math.round(opAnnual / targetOpOku * 100) : 0;
   const opGapOku = Math.max(0, targetOpOku - outlookOpOku);  // 목표−전망 격차(정보용)
 
   return {
@@ -6197,26 +6204,28 @@ const fmt = {
   }
 };
 
-function _pctFromSeries(series, fallback) {
+function _pctFromSeries(series) {
   try {
     const actuals = (series?.actual || []).filter(v => v !== null && Number.isFinite(Number(v))).map(Number);
     if (actuals.length >= 2 && actuals[0] > 0) return ((actuals[actuals.length - 1] - actuals[0]) / actuals[0]) * 100;
   } catch(e) {}
-  return fallback;
+  return null;
 }
 
 function _getTriggerMarketMetrics() {
-  let cornPct = 7.2, soybeanPct = 5.8, fxPct = 3.4, bdiPct = 12.0;
+  let cornPct = null, soybeanPct = null, fxPct = null, bdiPct = null;
   try {
     const storedCbot = typeof getStoredCbotSeries === 'function' ? getStoredCbotSeries() : null;
     const storedFx = typeof getStoredEcosFxSeries === 'function' ? getStoredEcosFxSeries() : null;
     const storedBdi = typeof getStoredBdiSeries === 'function' ? getStoredBdiSeries() : null;
-    cornPct = _pctFromSeries(storedCbot?.corn, cornPct);
-    soybeanPct = _pctFromSeries(storedCbot?.soymeal, soybeanPct);
-    fxPct = _pctFromSeries(storedFx, fxPct);
-    bdiPct = _pctFromSeries(storedBdi, bdiPct);
+    cornPct = _pctFromSeries(storedCbot?.corn);
+    soybeanPct = _pctFromSeries(storedCbot?.soymeal);
+    fxPct = _pctFromSeries(storedFx);
+    bdiPct = _pctFromSeries(storedBdi);
   } catch(e) {}
-  const grainPct = cornPct * 0.56 + soybeanPct * 0.44;
+  const grainPct = (Number.isFinite(cornPct) && Number.isFinite(soybeanPct))
+    ? cornPct * 0.56 + soybeanPct * 0.44
+    : null;
   return { cornPct, soybeanPct, grainPct, fxPct, bdiPct };
 }
 
@@ -6226,11 +6235,9 @@ function _fmtPct(v, d = 1) {
 }
 
 function _getOpShortfallPct() {
-  let planOp = 113, outlookOp = 25;
-  if (DATA.loaded && DATA.agg) {
-    planOp = (DATA.agg.plan?.byMetric?.op?.total || 0) / 1e8 || planOp;
-    outlookOp = (DATA.agg.outlook?.byMetric?.op?.total || 0) / 1e8 || outlookOp;
-  }
+  if (!DATA.loaded || !DATA.agg) return { planOp: null, outlookOp: null, pct: null };
+  const planOp = (DATA.agg.plan?.byMetric?.op?.total || 0) / 1e8;
+  const outlookOp = (DATA.agg.outlook?.byMetric?.op?.total || 0) / 1e8;
   const pct = planOp > 0 ? ((outlookOp - planOp) / planOp) * 100 : 0;
   return { planOp, outlookOp, pct };
 }
@@ -6267,21 +6274,35 @@ function renderStatusBasis() {
   const body = document.getElementById('triggerBasisBody');
   if (!body) return;
   const m = _getTriggerMarketMetrics();
+  const hasUploadData = !!(DATA.loaded && DATA.agg);
   const op = _getOpShortfallPct();
-  const r = compute();
   const opt = STATE.churnHistoryOption || { enabled: false, rows: [] };
   const stats = _getChurnHistoryStats();
   const histUsed = !!(opt.enabled && stats);
-  const churnFormula = histUsed
-    ? `기본 ${r.churn.toFixed(1)}% = 기본모델과 과거 ${stats.rows.length}건 회귀 보정값을 55:45로 가중`
-    : `기본모델 = (조정폭 ${r.amt}원 ÷ 28 × 4.0) + 회차보정 + 커뮤니케이션보정`;
+  const fmtMarket = v => Number.isFinite(v) ? _fmtPct(v) : '데이터 없음';
+  const judgeAbs = (v, threshold) => !Number.isFinite(v) ? '시장 데이터 없음' : (Math.abs(v) >= threshold ? '임계 초과' : '안정');
+  const judgeMin = (v, threshold) => !Number.isFinite(v) ? '시장 데이터 없음' : (v >= threshold ? '임계 초과' : '안정');
   const rows = [
-    ['곡물가 상승', `CBOT 옥수수 ${_fmtPct(m.cornPct)}×0.56 + 대두박 ${_fmtPct(m.soybeanPct)}×0.44`, _fmtPct(m.grainPct), Math.abs(m.grainPct) >= 5 ? '임계 초과' : '안정'],
-    ['환율', `원/달러 환율 90일 변동률 = (최근지수−기준지수)÷기준지수×100`, _fmtPct(m.fxPct), Math.abs(m.fxPct) >= 3 ? '임계 근접/초과' : '안정'],
-    ['BDI 운임', `BDI 90일 변동률 = (최근지수−기준지수)÷기준지수×100`, _fmtPct(m.bdiPct), m.bdiPct >= 20 ? '임계 초과' : '안정'],
-    ['OP 차질', `(전망 OP ${op.outlookOp.toFixed(1)}억 − 사업계획 OP ${op.planOp.toFixed(1)}억) ÷ 사업계획 OP ×100`, `${op.pct.toFixed(0)}%`, op.pct <= -30 ? '임계 초과' : '안정'],
-    ['거래처 이탈', churnFormula, `${r.churn.toFixed(1)}%`, r.churn > 5 ? '게이트 차단' : r.churn >= 2 ? '주의' : '안정']
+    ['곡물가 상승', Number.isFinite(m.grainPct) ? `CBOT 옥수수 ${fmtMarket(m.cornPct)}×0.56 + 대두박 ${fmtMarket(m.soybeanPct)}×0.44` : '시장 데이터 갱신 필요', fmtMarket(m.grainPct), judgeAbs(m.grainPct, 5)],
+    ['환율', Number.isFinite(m.fxPct) ? `원/달러 환율 90일 변동률 = (최근지수−기준지수)÷기준지수×100` : '시장 데이터 갱신 필요', fmtMarket(m.fxPct), judgeAbs(m.fxPct, 3)],
+    ['BDI 운임', Number.isFinite(m.bdiPct) ? `BDI 90일 변동률 = (최근지수−기준지수)÷기준지수×100` : '시장 데이터 갱신 필요', fmtMarket(m.bdiPct), judgeMin(m.bdiPct, 20)]
   ];
+  let r = null;
+  if (hasUploadData) {
+    r = compute();
+    const churnFormula = histUsed
+      ? `기본 ${r.churn.toFixed(1)}% = 기본모델과 과거 ${stats.rows.length}건 회귀 보정값을 55:45로 가중`
+      : `기본모델 = (조정폭 ${r.amt}원 ÷ 28 × 4.0) + 회차보정 + 커뮤니케이션보정`;
+    rows.push(
+      ['OP 차질', `(전망 OP ${op.outlookOp.toFixed(1)}억 − 사업계획 OP ${op.planOp.toFixed(1)}억) ÷ 사업계획 OP ×100`, `${op.pct.toFixed(0)}%`, op.pct <= -30 ? '임계 초과' : '안정'],
+      ['거래처 이탈', churnFormula, `${r.churn.toFixed(1)}%`, r.churn > 5 ? '게이트 차단' : r.churn >= 2 ? '주의' : '안정']
+    );
+  } else {
+    rows.push(
+      ['OP 차질', '현황 진단 업로드 후 산출', '산출전', '업로드 필요'],
+      ['거래처 이탈', '현황 진단 업로드 후 산출', '산출전', '업로드 필요']
+    );
+  }
   body.innerHTML = rows.map(row => `
     <tr>
       <td style="font-weight:700;">${row[0]}</td>
@@ -6295,11 +6316,11 @@ function renderStatusBasis() {
   const bdiEl = document.getElementById('triggerBdiVal');
   const opEl = document.getElementById('triggerOpGapVal');
   const churnEl = document.getElementById('triggerChurnVal');
-  if (grainEl) grainEl.innerHTML = `${m.grainPct >= 0 ? '+' : ''}${m.grainPct.toFixed(1)}<small>%</small>`;
-  if (fxEl) fxEl.innerHTML = `${m.fxPct >= 0 ? '+' : ''}${m.fxPct.toFixed(1)}<small>%</small>`;
-  if (bdiEl) bdiEl.innerHTML = `${m.bdiPct >= 0 ? '+' : ''}${m.bdiPct.toFixed(0)}<small>%</small>`;
-  if (opEl) opEl.innerHTML = `${op.pct.toFixed(0)}<small>%</small>`;
-  if (churnEl) churnEl.innerHTML = `${r.churn.toFixed(1)}<small>%</small>`;
+  if (grainEl) grainEl.innerHTML = Number.isFinite(m.grainPct) ? `${m.grainPct >= 0 ? '+' : ''}${m.grainPct.toFixed(1)}<small>%</small>` : '대기';
+  if (fxEl) fxEl.innerHTML = Number.isFinite(m.fxPct) ? `${m.fxPct >= 0 ? '+' : ''}${m.fxPct.toFixed(1)}<small>%</small>` : '대기';
+  if (bdiEl) bdiEl.innerHTML = Number.isFinite(m.bdiPct) ? `${m.bdiPct >= 0 ? '+' : ''}${m.bdiPct.toFixed(0)}<small>%</small>` : '대기';
+  if (opEl) opEl.innerHTML = hasUploadData && Number.isFinite(op.pct) ? `${op.pct.toFixed(0)}<small>%</small>` : '산출전';
+  if (churnEl) churnEl.innerHTML = r ? `${r.churn.toFixed(1)}<small>%</small>` : '산출전';
   const foot = document.getElementById('triggerBasisFootnote');
   if (foot) foot.innerHTML = `※ 외부 3종은 공식·공개 지표만 사용합니다. OP 차질은 업로드된 자사 사업계획/전망 손익 기준입니다. 거래처 이탈 고도화 옵션은 <strong>당사 과거 데이터가 입력된 경우에만</strong> 반영됩니다.`;
   renderChurnHistorySummary();
@@ -6437,7 +6458,7 @@ function goView(id) {
         try { renderScenariosMonthly(); } catch(e) {}
       });
     }
-    if (id === 'view-decision') { renderAxes(); renderImpact(); renderWorkflow(); renderDecisionCharts(); renderLog(); renderBoardBanner(); renderScenarioBanner(); if (typeof initAdvSettingsUI === 'function') initAdvSettingsUI(); }
+    if (id === 'view-decision') { renderAxes(); renderImpact(); renderWorkflow(); renderManualCatInputs(); renderDecisionCharts(); renderLog(); renderBoardBanner(); renderScenarioBanner(); if (typeof initAdvSettingsUI === 'function') initAdvSettingsUI(); }
     if (id === 'view-execution') renderExecution();
     if (id === 'view-tracking') renderTrackingGate();
     if (id === 'view-compliance') renderComplianceHistory();
@@ -6730,6 +6751,18 @@ function proceedToDecision() {
 
 /* ---------- 7. 임팩트 카드 (4 KPI) ---------- */
 function renderImpact() {
+  const set = (id, html) => { const el = document.getElementById(id); if (el) el.innerHTML = html; };
+  if (!DATA.loaded || !DATA.agg) {
+    set('kpiAvg', '산출전');
+    set('kpiAvgD', '업로드 데이터 기준');
+    set('kpiOp', '산출전');
+    set('kpiOpD', '업로드 데이터 기준');
+    set('kpiEff', '산출전');
+    set('kpiEffD', '업로드 데이터 기준');
+    set('kpiChurn', '산출전');
+    set('kpiChurnD', '업로드 데이터 기준');
+    return;
+  }
   const r = compute();
 
   // 등급
@@ -6743,7 +6776,6 @@ function renderImpact() {
   else if (r.churn <= 4) { churnGrade = '주의'; churnClass = 'flat'; }
   else { churnGrade = '경고'; churnClass = 'down'; }
 
-  const set = (id, html) => { const el = document.getElementById(id); if (el) el.innerHTML = html; };
   set('kpiAvg', `${_fmtSignedWon(r.amt, 1, '')}<span class="unit">원/kg</span>`);
   set('kpiAvgD', `시장 압력 ${Math.round(r.scopeWeight * 100)}% 반영`);
   set('kpiOp', `${fmt.dec(r.opAnnual)}<span class="unit">억원</span>`);
@@ -6759,11 +6791,17 @@ function renderImpact() {
 }
 
 function renderBoardBanner() {
-  const r = compute();
   const preset = PRESETS[STATE.scenario];
   const num = preset?.num || '커스텀';
   const setText = (id, txt) => { const el = document.getElementById(id); if (el) el.textContent = txt; };
   setText('boardScenarioNum', num);
+  if (!DATA.loaded || !DATA.agg) {
+    setText('boardReco', `${preset?.name || '커스텀'} · 업로드 후 산출`);
+    setText('boardRecoSub', '현황 진단에서 ERP 데이터를 업로드하면 조정폭·OP·달성률이 자동 계산됩니다.');
+    setText('boardRecoAvg', '산출전');
+    return;
+  }
+  const r = compute();
   setText('boardReco', `${preset?.name || '커스텀'} · 평균 ${_fmtSignedWon(r.amt)}/kg · OP ${_fmtSignedOku(r.opAnnual)} · 달성률 ${r.achievement}%`);
   setText('boardRecoSub', `${r.rounds}회 · 회당 효율 ${fmt.dec(r.efficiency)}원/회 · 이탈 ${fmt.dec(r.churn)}% · 종합 ${r.overall}점`);
   setText('boardRecoAvg', `${_fmtSignedWon(r.amt)}/kg`);
@@ -6771,9 +6809,13 @@ function renderBoardBanner() {
 
 /* ---------- 8. 워크플로우 ---------- */
 function renderWorkflow() {
-  const r = compute();
   const wrap = document.getElementById('workflow');
   if (!wrap) return;
+  if (!DATA.loaded || !DATA.agg) {
+    wrap.innerHTML = '<div style="grid-column:1/-1; padding:14px; text-align:center; color:var(--ink-3);">현황 진단 업로드 후 실행 워크플로우가 자동 산출됩니다.</div>';
+    return;
+  }
+  const r = compute();
   const startM = r.startMonth;
   const steps = [];
   // 회차 워크플로우: 1차/2차/3차 인상 노드 + D+30 측정 노드
@@ -6932,7 +6974,7 @@ function runComplianceCheck() {
     { id: 'P1', name: '경쟁사 가격 자동 반영 금지',     pass: true, evidence: '시스템 내 경쟁사 판가 입력 필드·API·업로드 슬롯 부재' },
     { id: 'P2', name: '경쟁사 가격 추종 로직 금지',     pass: true, evidence: 'if-then 추종 로직 0건 (코드 검증). 권고 조정폭 = 자사 OP 격차 산식만 사용' },
     { id: 'P3', name: '업계 공동 데이터 활용 최소화',   pass: true, evidence: '자사 ERP 단일 출처 + 외부 통합 AI 미연동' },
-    { id: 'P4', name: '가격결정 근거 자사 손익 중심',   pass: true, evidence: '사업계획 OP 113억 기반 역산. KPI 4종 모두 자사 데이터 파생' },
+    { id: 'P4', name: '가격결정 근거 자사 손익 중심',   pass: true, evidence: '업로드된 사업계획 OP 기반 역산. KPI 4종 모두 자사 데이터 파생' },
     { id: 'P5', name: '최종 의사결정 독립 수행',        pass: true, evidence: '4단계 결재(실무→임원→경영진→감사) 통과 + 경쟁사 협의 루트 부재' },
     { id: 'P6', name: 'AI 추천 + 의사결정 로그 보관',   pass: true, evidence: `슬라이더 조정·결재 액션 자동 기록 (현재 ${STATE.decisions.length}건). 5년 보관` },
     { id: 'P7', name: '법규 준수 사전 반영',    pass: true, evidence: `자가진단 8항목 게이트 통과 (필수 ${CHECKS.filter(c=>c.required && STATE.checks[c.id]).length}/6 + 권장 ${CHECKS.filter(c=>!c.required && STATE.checks[c.id]).length}/2)` }
@@ -7143,7 +7185,7 @@ function recordDecision(action) {
     law: '§40 OK',
     actionClass: action === '승인' ? 'pos' : action === '보류' ? 'warn' : 'neg'
   });
-  if (STATE.decisions.length > 2000) STATE.decisions = STATE.decisions.slice(0, 2000);
+  dpdsTrimDecisions();
   STATE.decisionStatus = action === '승인' ? 'approve' : action === '보류' ? 'hold' : 'review';
   renderLog();
   save();
@@ -7166,7 +7208,7 @@ function recordDecision(action) {
       law: cmpResult.overall === 'PASS' ? '§40 PASS' : '§40 WARN',
       actionClass: cmpResult.overall === 'PASS' ? 'pos' : 'warn'
     });
-    if (STATE.decisions.length > 2000) STATE.decisions = STATE.decisions.slice(0, 2000);
+    dpdsTrimDecisions();
 
     // 3) 컴플라이언스 페이지 이력 테이블이 열려있다면 즉시 갱신
     renderLog();
@@ -7276,7 +7318,7 @@ function writeAuditLog(action, detail, law = 'UI LOG', user = '시스템 기록'
     // v42: decisions (영구 감사 로그) — 핵심 액션만 저장
     if (isKeyAction) {
       STATE.decisions.unshift(entry);
-      if (STATE.decisions.length > 2000) STATE.decisions = STATE.decisions.slice(0, 2000);
+      dpdsTrimDecisions();
     }
     // interactionLog (UI 표시용 활동 로그) — 모두 저장하되 분량 제한
     STATE.interactionLog.unshift(entry);
@@ -7410,6 +7452,283 @@ function exportLog() {
   }
   showToast('감사로그 CSV 다운로드 완료', 'ok');
 }
+</script>
+<script>
+/* =====================================================================
+   DPDS v28 — 감사로그 무결성·보관 정직화 + Supabase 연결 안정화 모듈
+   - 기존 업무 로직/화면은 변경하지 않고, 감사·보안 계층만 보강한다.
+   - (1) 보관한도 정직화: localStorage는 '최신 작업버퍼', 전체 기록은 CSV/Supabase
+   - (2) 무결성 해시체인: 각 핵심 의사결정에 SHA-256 prevHash 연결 → 변조 탐지
+   - (3) Supabase: 미연결 시 graceful degrade + 연결상태 표시 + RLS 점검 안내
+   ===================================================================== */
+(function () {
+  'use strict';
+  /* ---------- 설정 ---------- */
+  var DECISIONS_CAP = 5000;        // 로컬 보관 핵심 의사결정 한도(초과분은 CSV/Supabase 백업으로 보존)
+  var __trimWarned = false;        // 세션당 1회 경고
+  var __quotaWarned = false;
+  var __integrityCache = null;     // 마지막 검증 결과 캐시(렌더 성능 보호)
+
+  /* ---------- SHA-256 (동기, 표준 구현) ---------- */
+  var K256 = [
+    0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,
+    0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,
+    0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,
+    0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,
+    0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,
+    0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,
+    0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,
+    0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2];
+  function dpdsSha256(message) {
+    function rotr(x, n) { return (x >>> n) | (x << (32 - n)); }
+    var msg = unescape(encodeURIComponent(String(message)));   // UTF-8
+    var l = msg.length, bytes = [], i, off;
+    for (i = 0; i < l; i++) bytes.push(msg.charCodeAt(i) & 0xff);
+    bytes.push(0x80);
+    while (bytes.length % 64 !== 56) bytes.push(0);
+    var bitLen = l * 8;
+    bytes.push(0, 0, 0, 0,
+      (bitLen >>> 24) & 0xff, (bitLen >>> 16) & 0xff, (bitLen >>> 8) & 0xff, bitLen & 0xff);
+    var H = [0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19];
+    var w = new Array(64);
+    for (off = 0; off < bytes.length; off += 64) {
+      for (i = 0; i < 16; i++) {
+        w[i] = (bytes[off+i*4] << 24) | (bytes[off+i*4+1] << 16) | (bytes[off+i*4+2] << 8) | (bytes[off+i*4+3]);
+      }
+      for (i = 16; i < 64; i++) {
+        var s0 = rotr(w[i-15],7) ^ rotr(w[i-15],18) ^ (w[i-15] >>> 3);
+        var s1 = rotr(w[i-2],17) ^ rotr(w[i-2],19) ^ (w[i-2] >>> 10);
+        w[i] = (w[i-16] + s0 + w[i-7] + s1) | 0;
+      }
+      var a=H[0],b=H[1],c=H[2],d=H[3],e=H[4],f=H[5],g=H[6],h=H[7], t1, t2, S0, S1, ch, maj;
+      for (i = 0; i < 64; i++) {
+        S1 = rotr(e,6) ^ rotr(e,11) ^ rotr(e,25); ch = (e & f) ^ ((~e) & g);
+        t1 = (h + S1 + ch + K256[i] + w[i]) | 0;
+        S0 = rotr(a,2) ^ rotr(a,13) ^ rotr(a,22); maj = (a & b) ^ (a & c) ^ (b & c);
+        t2 = (S0 + maj) | 0;
+        h=g; g=f; f=e; e=(d + t1) | 0; d=c; c=b; b=a; a=(t1 + t2) | 0;
+      }
+      H[0]=(H[0]+a)|0; H[1]=(H[1]+b)|0; H[2]=(H[2]+c)|0; H[3]=(H[3]+d)|0;
+      H[4]=(H[4]+e)|0; H[5]=(H[5]+f)|0; H[6]=(H[6]+g)|0; H[7]=(H[7]+h)|0;
+    }
+    var hex = '';
+    for (i = 0; i < 8; i++) hex += ('00000000' + (H[i] >>> 0).toString(16)).slice(-8);
+    return hex;
+  }
+  window.dpdsSha256 = dpdsSha256;
+
+  /* ---------- 감사로그 무결성 해시체인 ----------
+     entry.sq = 일련번호, entry.ph = 직전 해시, entry.h = 이 항목 해시
+     hash = SHA256( ph | sq | 시각 | 사용자 | 액션 | 상세 | 조항 )
+     STATE.decisions 는 unshift(최신 우선) 저장 → 시계열은 역순(reverse) */
+  function canonical(e) {
+    return [e.ph || 'GENESIS', e.sq, e.time, e.user, e.action, e.detail, e.law].join('|');
+  }
+  function dpdsSealAll() {
+    if (typeof STATE === 'undefined') return;
+    if (!Array.isArray(STATE.decisions)) STATE.decisions = [];
+    if (typeof STATE.decisionsSeq !== 'number') STATE.decisionsSeq = 0;
+    if (typeof STATE.decisionsTrimmed !== 'number') STATE.decisionsTrimmed = 0;
+    if (typeof STATE.decisionsHead !== 'string') STATE.decisionsHead = 'GENESIS';
+    if (!STATE.auditChainInitAt) STATE.auditChainInitAt = (typeof fmt !== 'undefined' && fmt.date) ? fmt.date() : new Date().toISOString();
+    var chrono = STATE.decisions.slice().reverse();   // 오래된→최신
+    var head = STATE.decisionsHead, seq = STATE.decisionsSeq, sealedAny = false;
+    for (var i = 0; i < chrono.length; i++) {
+      var e = chrono[i];
+      if (e.h) { head = e.h; if (typeof e.sq === 'number' && e.sq > seq) seq = e.sq; continue; }
+      // 미봉인(신규/레거시) 항목 봉인 — 한 번 봉인된 해시는 절대 덮어쓰지 않음
+      e.sq = ++seq;
+      e.ph = head;
+      e.h = dpdsSha256(canonical(e));
+      head = e.h; sealedAny = true;
+    }
+    STATE.decisionsHead = head;
+    STATE.decisionsSeq = seq;
+    if (sealedAny) __integrityCache = null;   // 재검증 필요
+  }
+  window.dpdsSealAll = dpdsSealAll;
+
+  /* ---------- 보관한도 정직화 ----------
+     2000건 고정 슬라이스(오래된 핵심 의사결정 조용히 유실)를 대체.
+     초과분은 splice로 분리하되 누적 카운트(decisionsTrimmed)를 남기고 경고. */
+  function dpdsTrimDecisions() {
+    if (typeof STATE === 'undefined' || !Array.isArray(STATE.decisions)) return;
+    if (STATE.decisions.length > DECISIONS_CAP) {
+      var removed = STATE.decisions.splice(DECISIONS_CAP);   // 최신 우선 → 뒤쪽(오래된 것) 제거
+      STATE.decisionsTrimmed = (STATE.decisionsTrimmed || 0) + removed.length;
+      if (!__trimWarned) {
+        __trimWarned = true;
+        console.warn('[DPDS] 감사로그가 로컬 보관 한도(' + DECISIONS_CAP + '건)를 초과했습니다. 오래된 ' +
+          STATE.decisionsTrimmed + '건은 정기 CSV 다운로드/Supabase 공유저장으로 보존하세요. (해시체인 봉인 완료분)');
+        if (typeof showToast === 'function') showToast('감사로그 한도 초과 — CSV/클라우드 백업을 권장합니다', 'warn');
+      }
+    }
+  }
+  window.dpdsTrimDecisions = dpdsTrimDecisions;
+
+  function dpdsOnQuota() {
+    if (__quotaWarned) return; __quotaWarned = true;
+    console.warn('[DPDS] 브라우저 저장공간(localStorage) 한도 도달 — 감사로그 CSV를 백업한 뒤 오래된 기록을 정리하세요.');
+    if (typeof showToast === 'function') showToast('저장공간 한도 — 감사로그 CSV 백업 후 정리가 필요합니다', 'warn');
+  }
+  window.dpdsOnQuota = dpdsOnQuota;
+
+  /* ---------- 무결성 검증 ---------- */
+  function verifyAuditChain() {
+    if (typeof STATE === 'undefined' || !Array.isArray(STATE.decisions)) {
+      return { ok: true, checked: 0, sealed: 0, brokenSeq: null, head: 'GENESIS', reason: 'no-data' };
+    }
+    var chrono = STATE.decisions.slice().reverse();
+    var checked = 0, sealed = 0, brokenSeq = null, prev = null, head = 'GENESIS';
+    for (var i = 0; i < chrono.length; i++) {
+      var e = chrono[i];
+      if (!e.h) continue;            // 아직 미봉인(다음 save 시 봉인)
+      sealed++; checked++;
+      var expect = dpdsSha256(canonical(e));
+      if (expect !== e.h) { brokenSeq = (e.sq != null ? e.sq : i); break; }      // 내용 변조
+      if (prev && e.ph !== prev.h) { brokenSeq = (e.sq != null ? e.sq : i); break; } // 링크 단절(삽입·삭제)
+      prev = e; head = e.h;
+    }
+    var res = { ok: brokenSeq === null, checked: checked, sealed: sealed, brokenSeq: brokenSeq,
+                head: head, total: (STATE.decisions.length + (STATE.decisionsTrimmed || 0)),
+                trimmed: (STATE.decisionsTrimmed || 0) };
+    __integrityCache = res;
+    return res;
+  }
+  window.dpdsVerifyAudit = verifyAuditChain;
+
+  /* ---------- renderLog 보강(무결성/보관 상태 표시) ---------- */
+  function hookRenderLog() {
+    if (typeof renderLog !== 'function' || renderLog.__dpdsHooked) return;
+    var orig = renderLog;
+    renderLog = function () {
+      orig.apply(this, arguments);
+      try {
+        var cnt = document.getElementById('logCount');
+        if (cnt && typeof STATE !== 'undefined' && Array.isArray(STATE.decisions)) {
+          var v = __integrityCache;   // 캐시된 검증 결과 사용(렌더마다 재해시 방지)
+          var badge = v ? (v.ok ? ' · 무결성 ✓' : ' · 무결성 ✗(seq ' + v.brokenSeq + ')') : '';
+          var trimmed = (STATE.decisionsTrimmed || 0);
+          var trimTxt = trimmed > 0 ? ' · 한도초과 ' + trimmed + '건 백업필요' : '';
+          cnt.textContent = STATE.decisions.length + ' entries · 자동 저장' + badge + trimTxt;
+          cnt.title = '로컬 보관 ' + STATE.decisions.length + '건 (한도 ' + DECISIONS_CAP + '건) · 누적 ' +
+            (STATE.decisions.length + trimmed) + '건 · 전체 기록은 CSV/Supabase 백업으로 보존' +
+            (v ? '\n무결성: ' + (v.ok ? 'PASS' : 'FAIL(seq ' + v.brokenSeq + ')') + ' · head=' + (v.head || '').slice(0, 12) : '');
+        }
+      } catch (e) {}
+    };
+    renderLog.__dpdsHooked = true;
+  }
+
+  /* ---------- exportLog 보강(무결성 컬럼 + 검증 스탬프) ---------- */
+  function hookExportLog() {
+    if (typeof exportLog !== 'function' || exportLog.__dpdsHooked) return;
+    exportLog = function () {
+      try {
+        if (typeof STATE === 'undefined' || !Array.isArray(STATE.decisions) || STATE.decisions.length === 0) {
+          if (typeof showToast === 'function') showToast('감사로그가 비어있습니다', 'warn');
+          return;
+        }
+        dpdsSealAll();
+        var v = verifyAuditChain();
+        var headers = ['seq', '시각', '사용자', '액션', '상세', '조항', 'prevHash', 'hash'];
+        var chrono = STATE.decisions.slice().reverse();   // CSV는 시계열 오름차순
+        var rows = chrono.map(function (d) {
+          return [d.sq != null ? d.sq : '', d.time, d.user, d.action, d.detail, d.law, d.ph || '', d.h || ''];
+        });
+        var meta = [
+          [], ['# DPDS 감사로그 무결성 스탬프'],
+          ['# 생성시각', (typeof fmt !== 'undefined' && fmt.date) ? fmt.date() : new Date().toISOString()],
+          ['# 검증결과', v.ok ? 'PASS (변조 없음)' : 'FAIL (seq ' + v.brokenSeq + ' 불일치)'],
+          ['# 봉인건수', v.sealed], ['# 로컬보관', STATE.decisions.length],
+          ['# 누적(추정)', v.total], ['# 한도초과 보관외', v.trimmed],
+          ['# headHash', v.head],
+          ['# 안내', '본 CSV가 5년 보관용 원본 기록입니다. headHash를 별도(메일/문서)에 보관하면 사후 변조를 탐지할 수 있습니다.']
+        ];
+        var all = [headers].concat(rows).concat(meta);
+        var csv = '﻿' + all.map(function (r) {
+          return r.map(function (c) { return '"' + (c + '').replace(/"/g, '""') + '"'; }).join(',');
+        }).join('\n');
+        var blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        var fname = 'DPDS_감사로그_' + new Date().toISOString().slice(0, 10) + (v.ok ? '_검증PASS' : '_검증FAIL') + '.csv';
+        if (typeof saveAs !== 'undefined') { saveAs(blob, fname); }
+        else { var url = URL.createObjectURL(blob); var a = document.createElement('a'); a.href = url; a.download = fname; a.click(); URL.revokeObjectURL(url); }
+        if (typeof renderLog === 'function') renderLog();
+        if (typeof showToast === 'function') showToast('감사로그 CSV 다운로드 완료 · 무결성 ' + (v.ok ? 'PASS' : 'FAIL'), v.ok ? 'ok' : 'warn');
+      } catch (e) { if (typeof showToast === 'function') showToast('감사로그 내보내기 실패', 'warn'); }
+    };
+    exportLog.__dpdsHooked = true;
+  }
+
+  /* ---------- restore 보강(로드시 변조 검증 → 봉인) ---------- */
+  function hookRestore() {
+    if (typeof restore !== 'function' || restore.__dpdsHooked) return;
+    var orig = restore;
+    restore = function () {
+      orig.apply(this, arguments);
+      try {
+        // 1) 로드 직후, 재봉인 전에 기존 해시 검증(리로드 간 변조 탐지)
+        var v = verifyAuditChain();
+        if (v.sealed > 0 && !v.ok) {
+          console.warn('[DPDS] 감사로그 무결성 검증 실패 — seq ' + v.brokenSeq + ' 에서 불일치. 저장본이 외부에서 변경되었을 수 있습니다.');
+          if (typeof showToast === 'function') showToast('감사로그 무결성 경고 — seq ' + v.brokenSeq + ' 불일치', 'warn');
+        }
+        // 2) 신규/레거시 미봉인 항목 봉인 + 재검증 캐시
+        dpdsSealAll();
+        verifyAuditChain();
+      } catch (e) {}
+    };
+    restore.__dpdsHooked = true;
+  }
+
+  /* ---------- Supabase 연결 상태 표시 + RLS 점검 안내 ---------- */
+  function dpdsSupabaseStatus() {
+    if (window.__dpdsSupabaseCdnFailed) return 'cdn-failed';
+    if (window.__dpdsSupabaseInitError) return 'init-failed';
+    if (!window.supabaseClient) return 'no-client';
+    return 'ready';
+  }
+  window.dpdsSupabaseStatus = dpdsSupabaseStatus;
+  function showSupabaseChip() {
+    try {
+      var st = dpdsSupabaseStatus();
+      var id = 'dpdsSbChip';
+      var old = document.getElementById(id); if (old) old.remove();
+      var problem = (st !== 'ready');
+      var chip = document.createElement('div');
+      chip.id = id;
+      chip.style.cssText = 'position:fixed;left:14px;bottom:14px;z-index:9999;font-size:11px;line-height:1.4;' +
+        'padding:7px 11px;border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,.18);font-family:Pretendard,-apple-system,sans-serif;' +
+        'max-width:300px;cursor:default;border:1px solid;' +
+        (problem ? 'background:#fef2f2;color:#991b1b;border-color:#fecaca;' : 'background:#f0fdf4;color:#166534;border-color:#bbf7d0;');
+      var msg = {
+        'cdn-failed': '⚠ Supabase 미연결(CDN 차단) — 클라우드 공유저장만 비활성. 로컬 분석·감사로그는 정상입니다.',
+        'init-failed': '⚠ Supabase 초기화 실패 — 클라우드 공유저장만 비활성. 로컬 기능은 정상입니다.',
+        'no-client': '⚠ Supabase 클라이언트 없음 — 클라우드 공유저장 비활성(로컬 정상).',
+        'ready': '✓ Supabase 연결됨 · 공유저장 사용 가능'
+      }[st];
+      var rls = 'RLS(행수준보안) 점검: 익명키는 공개키입니다. dpds_uploads / dpds-files 에 RLS가 켜져 있는지 Supabase 콘솔에서 확인하세요. RLS 미설정 시 URL만으로 외부 열람·수정이 가능합니다.';
+      chip.title = rls;
+      chip.innerHTML = '<b>' + msg + '</b>' + (problem ? '' : '<br><span style="opacity:.75">RLS 점검 권장 — 위에 마우스를 올리면 안내</span>') +
+        ' <span style="margin-left:6px;cursor:pointer;opacity:.6" title="닫기">✕</span>';
+      chip.querySelector('span[title="닫기"]').onclick = function () { chip.remove(); };
+      document.body.appendChild(chip);
+      // 정상이면 RLS 안내를 콘솔에 1회 남기고 6초 후 칩 자동 숨김
+      if (!problem) {
+        if (!window.__dpdsRlsNoted) { window.__dpdsRlsNoted = true; console.info('[DPDS] ' + rls); }
+        setTimeout(function () { var c = document.getElementById(id); if (c) c.remove(); }, 6000);
+      }
+    } catch (e) {}
+  }
+
+  /* ---------- 부트스트랩 ---------- */
+  function dpdsBoot() {
+    hookRenderLog(); hookExportLog(); hookRestore();
+    showSupabaseChip();
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', dpdsBoot);
+  else dpdsBoot();
+})();
 </script>
 <script>/* === marketApi.js === */
 /* === ECOS 환율 + CBOT 옥수수·대두박 실데이터 연동 ===
@@ -7948,12 +8267,13 @@ function renderMarketCharts() {
 
   // 실데이터 변수 — 원가 압력 계산 등 블록 밖에서도 사용
   const storedCbot = getStoredCbotSeries();
-  const corn    = storedCbot ? storedCbot.corn    : _generateMarketSeries(100, 118, 1.5);
-  const soybean = storedCbot ? storedCbot.soymeal : _generateMarketSeries(100, 115, 1.2);
+  const emptyMarketSeries = () => ({ actual: Array(labels.length).fill(null), forecast: Array(labels.length).fill(null) });
+  const corn    = storedCbot?.corn    || emptyMarketSeries();
+  const soybean = storedCbot?.soymeal || emptyMarketSeries();
   const storedBdi = getStoredBdiSeries();
-  const bdi       = storedBdi || _generateMarketSeries(100, 130, 2.5);
+  const bdi       = storedBdi || emptyMarketSeries();
   const storedFx = getStoredEcosFxSeries();
-  const fx       = storedFx || _generateMarketSeries(100, 105, 0.7);
+  const fx       = storedFx || emptyMarketSeries();
 
   /* ============ 해외 시장: 옥수수·대두박·BDI·환율 ============ */
   const el = document.getElementById('chartOverseas');
@@ -8023,12 +8343,12 @@ function renderMarketCharts() {
   const elD = document.getElementById('chartDomestic');
   if (elD) {
     destroyChart('chartDomestic');
-    // KAMIS: 저장값 우선, 없으면 목업
+    // KAMIS: 저장값 우선, 없으면 빈 시리즈
     const storedKamis = getStoredKamisSeries();
-    const beef = (storedKamis?.beef) || _generateMarketSeries(100, 108, 1.0);
-    const pork = (storedKamis?.pork) || _generateMarketSeries(100, 112, 1.3);
-    const egg  = (storedKamis?.egg)  || _generateMarketSeries(100, 105, 1.5);
-    const fish = (storedKamis?.fish) || _generateMarketSeries(100, 103, 0.8);
+    const beef = (storedKamis?.beef) || emptyMarketSeries();
+    const pork = (storedKamis?.pork) || emptyMarketSeries();
+    const egg  = (storedKamis?.egg)  || emptyMarketSeries();
+    const fish = (storedKamis?.fish) || emptyMarketSeries();
 
     charts['chartDomestic'] = new Chart(elD, {
       type: 'line',
@@ -8115,31 +8435,62 @@ function renderMarketCharts() {
     const fxPct      = _chgPct(fx);
     const bdiPct     = _chgPct(bdi);
 
-    // 원료비 압력: 옥수수(0.56)+대두박(0.44) 가중 평균 → 실데이터 없으면 목업
-    let rawScore, fxScore, logScore;
+    // 원료비 압력: 옥수수(0.56)+대두박(0.44) 가중 평균
+    let rawScore = null, rawPct = null;
     if (cornPct !== null && soybeanPct !== null) {
-      const rawPct = cornPct * 0.56 + soybeanPct * 0.44;
+      rawPct = cornPct * 0.56 + soybeanPct * 0.44;
       rawScore = _toScore(rawPct);
-    } else {
-      rawScore = 82; // 목업
     }
-    fxScore  = fxPct  !== null ? _toScore(fxPct)  : 71;
-    logScore = bdiPct !== null ? _toScore(bdiPct) : 58;
+    const fxScore  = fxPct  !== null ? _toScore(fxPct)  : null;
+    const logScore = bdiPct !== null ? _toScore(bdiPct) : null;
 
-    const pressureData = [rawScore, fxScore, logScore, 45, 51]; // 인건비·에너지 목업 고정
+    const pressureLabels = [];
+    const pressureData = [];
+    const pressureColors = [];
+    const addPressure = (label, score, color) => {
+      if (score === null || !Number.isFinite(score)) return;
+      pressureLabels.push(label);
+      pressureData.push(score);
+      pressureColors.push(color);
+    };
+    addPressure('원료비', rawScore, C.red);
+    addPressure('환율', fxScore, C.gold);
+    addPressure('물류', logScore, C.navy2);
+
+    if (!pressureData.length) {
+      const formulaEl = document.getElementById('pressureFormula');
+      if (formulaEl) formulaEl.innerHTML = '시장 데이터 갱신 후 자동 계산됩니다.';
+      const pressureBasisBody = document.getElementById('pressureBasisBody');
+      if (pressureBasisBody) {
+        pressureBasisBody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:var(--ink-3); padding:10px;">시장 데이터 갱신 후 자동 계산됩니다.</td></tr>';
+      }
+      _drawUploadRequiredCanvas(el2, '시장 데이터 갱신 후 표시됩니다.');
+      renderStatusBasis?.();
+      return;
+    }
 
     // FORMULA_LOCK 수식 업데이트
-    const cornPctStr    = cornPct    !== null ? (cornPct    >= 0 ? '+' : '') + cornPct.toFixed(1)    + '%' : '+7.2%';
-    const soybeanPctStr = soybeanPct !== null ? (soybeanPct >= 0 ? '+' : '') + soybeanPct.toFixed(1) + '%' : '+5.8%';
-    const fxPctStr      = fxPct      !== null ? (fxPct      >= 0 ? '+' : '') + fxPct.toFixed(1)      + '%' : '+3.4%';
-    const bdiPctStr     = bdiPct     !== null ? (bdiPct     >= 0 ? '+' : '') + bdiPct.toFixed(1)     + '%' : '+12%';
+    const pctFmt = v => `${v >= 0 ? '+' : ''}${v.toFixed(1)}%`;
+    const terms = [];
+    let totalPressure = 0;
+    if (cornPct !== null) {
+      terms.push(`옥수수(<span style="color:var(--gold);">${pctFmt(cornPct)}</span>)×0.28`);
+      totalPressure += cornPct * 0.28;
+    }
+    if (soybeanPct !== null) {
+      terms.push(`대두(<span style="color:var(--gold);">${pctFmt(soybeanPct)}</span>)×0.22`);
+      totalPressure += soybeanPct * 0.22;
+    }
+    if (fxPct !== null) {
+      terms.push(`환율(<span style="color:var(--gold);">${pctFmt(fxPct)}</span>)×0.20`);
+      totalPressure += fxPct * 0.20;
+    }
+    if (bdiPct !== null) {
+      terms.push(`BDI(<span style="color:var(--gold);">${pctFmt(bdiPct)}</span>)×0.10`);
+      totalPressure += bdiPct * 0.10;
+    }
 
     // 가중 합산 외부 원가 압력 (%)
-    const wCorn    = cornPct    !== null ? cornPct    * 0.28 : 7.2  * 0.28;
-    const wSoybean = soybeanPct !== null ? soybeanPct * 0.22 : 5.8  * 0.22;
-    const wFx      = fxPct      !== null ? fxPct      * 0.20 : 3.4  * 0.20;
-    const wBdi     = bdiPct     !== null ? bdiPct     * 0.10 : 12   * 0.10;
-    const totalPressure = wCorn + wSoybean + wFx + wBdi;
     const totalStr = (totalPressure >= 0 ? '+' : '') + totalPressure.toFixed(2) + '%';
     const isReal = cornPct !== null || fxPct !== null;
 
@@ -8147,23 +8498,17 @@ function renderMarketCharts() {
     const formulaEl = document.getElementById('pressureFormula');
     if (formulaEl) {
       formulaEl.innerHTML =
-        `압력 = 옥수수(<span style="color:var(--gold);">${cornPctStr}</span>)×0.28 + 대두(<span style="color:var(--gold);">${soybeanPctStr}</span>)×0.22<br>` +
-        `+ 환율(<span style="color:var(--gold);">${fxPctStr}</span>)×0.20 + BDI(<span style="color:var(--gold);">${bdiPctStr}</span>)×0.10<br>` +
+        `압력 = ${terms.join(' + ')}<br>` +
         `= <strong style="color: var(--danger); font-size: 13px;">${totalStr}</strong> · 외부 원가 압력 (90일)` +
         (isReal ? ` <span style="color:var(--success);font-size:10px;">● 실데이터</span>` : '');
     }
 
     const pressureBasisBody = document.getElementById('pressureBasisBody');
     if (pressureBasisBody) {
-      const rawPct = (cornPct !== null && soybeanPct !== null) ? cornPct * 0.56 + soybeanPct * 0.44 : 7.2 * 0.56 + 5.8 * 0.44;
-      const pctFmt = v => `${v >= 0 ? '+' : ''}${v.toFixed(1)}%`;
-      const rowHtml = [
-        ['원료비', `옥수수 ${pctFmt(cornPct ?? 7.2)}×0.56 + 대두박 ${pctFmt(soybeanPct ?? 5.8)}×0.44 → ${pctFmt(rawPct)}`, `${pctFmt(rawPct)}`, rawScore],
-        ['환율', `원/달러 90일 변동률 ${pctFmt(fxPct ?? 3.4)} · 가중치 0.20`, `${pctFmt(fxPct ?? 3.4)}×0.20`, fxScore],
-        ['물류', `BDI 90일 변동률 ${pctFmt(bdiPct ?? 12)} · 가중치 0.10`, `${pctFmt(bdiPct ?? 12)}×0.10`, logScore],
-        ['인건비', '내부 인건비 지수 미연동 시 기본값 45점 적용', '기본값', 45],
-        ['에너지', '전력·유류비 내부 지수 미연동 시 기본값 51점 적용', '기본값', 51]
-      ];
+      const rowHtml = [];
+      if (rawScore !== null) rowHtml.push(['원료비', `옥수수 ${pctFmt(cornPct)}×0.56 + 대두박 ${pctFmt(soybeanPct)}×0.44 → ${pctFmt(rawPct)}`, `${pctFmt(rawPct)}`, rawScore]);
+      if (fxScore !== null) rowHtml.push(['환율', `원/달러 90일 변동률 ${pctFmt(fxPct)} · 가중치 0.20`, `${pctFmt(fxPct)}×0.20`, fxScore]);
+      if (logScore !== null) rowHtml.push(['물류', `BDI 90일 변동률 ${pctFmt(bdiPct)} · 가중치 0.10`, `${pctFmt(bdiPct)}×0.10`, logScore]);
       pressureBasisBody.innerHTML = rowHtml.map(r => `<tr><td style="font-weight:700;">${r[0]}</td><td style="color:var(--ink-2); line-height:1.45;">${r[1]}</td><td class="num">${r[2]}</td><td class="num" style="font-weight:700; color:${r[3] >= 70 ? 'var(--danger)' : r[3] >= 55 ? 'var(--gold)' : 'var(--success)'};">${r[3]}</td></tr>`).join('');
     }
 
@@ -8172,8 +8517,8 @@ function renderMarketCharts() {
     charts['chartPressure'] = new Chart(el2, {
       type: 'bar',
       data: {
-        labels: ['원료비', '환율', '물류', '인건비', '에너지'],
-        datasets: [{ label: '압력 지수', data: pressureData, backgroundColor: [C.red, C.gold, C.navy2, C.green, C.gold], borderRadius: 4 }]
+        labels: pressureLabels,
+        datasets: [{ label: '압력 지수', data: pressureData, backgroundColor: pressureColors, borderRadius: 4 }]
       },
       options: {
         responsive: true, maintainAspectRatio: false, indexAxis: 'y',
@@ -8351,29 +8696,92 @@ function _computeScenarioPreview(amtOverride) {
   }
   return r;
 }
+
+function _hasUploadedScenarioData() {
+  return !!(
+    typeof DATA !== 'undefined' &&
+    DATA.loaded &&
+    DATA.agg &&
+    DATA.agg.outlook?.byMetric &&
+    DATA.agg.plan?.byMetric
+  );
+}
+
+function _setScenarioCardsPlaceholder() {
+  ['scen1', 'scen2', 'scen3'].forEach(prefix => {
+    ['Amt', 'Rounds', 'Op', 'Ach', 'Eff', 'Churn'].forEach(suffix => {
+      const el = document.getElementById(`${prefix}${suffix}`);
+      if (el) el.textContent = '산출전';
+    });
+  });
+}
+
+function _drawUploadRequiredCanvas(el, message) {
+  if (!el || !el.getContext) return;
+  const ctx = el.getContext('2d');
+  if (!ctx) return;
+  const parent = el.parentElement;
+  const rect = parent ? parent.getBoundingClientRect() : null;
+  const width = Math.max(320, Math.round(rect?.width || el.clientWidth || 640));
+  const height = Math.max(220, Math.round(rect?.height || el.clientHeight || 280));
+  const ratio = (typeof window !== 'undefined' && window.devicePixelRatio) ? window.devicePixelRatio : 1;
+  el.width = Math.floor(width * ratio);
+  el.height = Math.floor(height * ratio);
+  el.style.width = `${width}px`;
+  el.style.height = `${height}px`;
+  ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+  ctx.clearRect(0, 0, width, height);
+  const cssColor = (typeof getComputedStyle === 'function')
+    ? getComputedStyle(document.documentElement).getPropertyValue('--ink-3')
+    : '';
+  ctx.fillStyle = (cssColor || '').trim() || '#64748b';
+  ctx.font = "600 13px Pretendard, Arial, sans-serif";
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(message, width / 2, height / 2);
+}
+
+function _getScenarioPreviewSet() {
+  if (!_hasUploadedScenarioData()) return null;
+  const keys = ['conservative', 'balanced', 'aggressive'];
+  const idx = { conservative: 1, balanced: 2, aggressive: 3 };
+  try {
+    return keys.map(key => {
+      const targetPct = SCENARIO_ACH_TARGETS[key];
+      const solved = _solveAmountForAchievement(targetPct);
+      const result = _computeScenarioPreview(solved.amt);
+      return { key, index: idx[key], targetPct, solved, result };
+    });
+  } catch(e) {
+    console.warn('[DPDS] scenario preview skip:', e);
+    return null;
+  }
+}
+
 function renderScenarioCards() {
   // v39: 시나리오 역산 기준 배너 갱신 (현황 진단의 목표·전망 OP 기준임을 표시)
   const basisEl = document.getElementById('scenarioBasisText');
-  const dataLoaded = (typeof DATA !== 'undefined') && DATA.loaded;
-  // 역산 기준 데이터 (전사)
-  const basis = _solveAmountForAchievement(100);  // 100% 기준으로 목표/전망/물량 추출
+  const previews = _getScenarioPreviewSet();
   if (basisEl) {
-    if (dataLoaded) {
+    if (previews) {
+      const basis = previews[previews.length - 1].solved;
       const nlMt = (basis.qtyNonLinkedKg / 1e6).toFixed(0);
+      const targetText = previews.map(p => `${p.index}안 목표 ${p.targetPct}%`).join(' · ');
       basisEl.innerHTML = `현황 진단 업로드 데이터 기준 — <strong>목표 OP ${basis.planOku.toFixed(1)}억 · 전망 OP ${basis.outlookOku.toFixed(1)}억</strong> · 비연동 물량 ${nlMt}천톤 · 환원율 ${(basis.recovery*100).toFixed(0)}%. ` +
-        `이 기준으로 <strong>1안 목표 80% · 2안 90% · 3안 100%</strong> 달성에 필요한 조정폭을 역산했습니다.`;
+        `이 기준으로 <strong>${targetText}</strong> 달성에 필요한 조정폭을 역산했습니다.`;
     } else {
-      basisEl.innerHTML = `<span style="color: var(--danger); font-weight: 700;">⚠ 현황 진단 데이터 미업로드</span> — 아래 값은 <strong>예시(목표 113억·전망 25억)</strong> 기준입니다. 현황 진단에서 실적·전망을 업로드하면 실제 데이터 기준으로 자동 재산출됩니다.`;
+      basisEl.innerHTML = `<span style="color: var(--danger); font-weight: 700;">현황 진단 데이터 미업로드</span> — 업로드 전 예시 숫자는 표시하지 않습니다. 현황 진단에서 실적·전망을 업로드하면 실제 데이터 기준으로 자동 재산출됩니다.`;
     }
   }
 
-  const keys = ['conservative', 'balanced', 'aggressive'];
-  const idx = { conservative: 1, balanced: 2, aggressive: 3 };
-  keys.forEach(key => {
-    const pct = SCENARIO_ACH_TARGETS[key];
-    const solved = _solveAmountForAchievement(pct);
-    const r = _computeScenarioPreview(solved.amt);
-    const n = idx[key];
+  if (!previews) {
+    _setScenarioCardsPlaceholder();
+    return;
+  }
+
+  previews.forEach(preview => {
+    const r = preview.result;
+    const n = preview.index;
     const set = (id, html) => { const el = document.getElementById(id); if (el) el.innerHTML = html; };
     const unit = (t) => `<span style="font-size:11px; color:var(--ink-3);"> ${t}</span>`;
     const monthsLabel = r.scheduleMonths && r.scheduleMonths.length
@@ -8409,30 +8817,18 @@ function renderScenarioChart() {
   const el = document.getElementById('chartScenarios');
   if (!el) return;
   destroyChart('chartScenarios');
-  let labels, eff, op, churn, spread, planAmt;
-  const sc = _scenarioFromData();
-  if (sc) {
-    labels = [
-      `1안 보수 (${_fmtSignedWon(sc.s1.amt, 1, '')}, ${sc.s1.rounds}회)`,
-      `2안 균형 (${_fmtSignedWon(sc.s2.amt, 1, '')}, ${sc.s2.rounds}회) ★`,
-      `3안 적극 (${_fmtSignedWon(sc.s3.amt, 1, '')}, ${sc.s3.rounds}회)`
-    ];
-    const _safeEff = s => s.rounds ? s.amt / s.rounds : 0;
-    eff = [_safeEff(sc.s1), _safeEff(sc.s2), _safeEff(sc.s3)];
-    op = [sc.s1.opOku, sc.s2.opOku, sc.s3.opOku];
-    churn = [sc.s1.churn, sc.s2.churn, sc.s3.churn].map(v => Math.round(v * 10) / 10);
-    // Spread Gap = 사업계획 단가(원/kg) - 시나리오 단가(원/kg). 양수=부족, 0=달성, 음수=초과 (소수점 1자리)
-    spread = [sc.s1.spreadGap, sc.s2.spreadGap, sc.s3.spreadGap].map(v => Math.round(v * 10) / 10);
-    planAmt = Math.round(sc.s2.planAmt * 10) / 10;  // 사업계획 단가 가정
-  } else {
-    labels = ['1안 보수 (+12, 1회)', '2안 균형 (+18, 1회) ★', '3안 적극 (+23, 2회)'];
-    eff = [12.0, 18.0, 11.5];
-    op = [62, 96, 119];
-    churn = [1.2, 1.8, 3.5];
-    // 사업계획 단가 가정 = 18원/kg, 시나리오는 12/18/23원
-    spread = [6.0, 0.0, -5.0];   // 18-12=6 / 18-18=0 / 18-23=-5
-    planAmt = 18;
+  const previews = _getScenarioPreviewSet();
+  if (!previews) {
+    _drawUploadRequiredCanvas(el, '현황 진단 업로드 후 표시됩니다.');
+    return;
   }
+  const names = { conservative: '보수', balanced: '균형', aggressive: '적극' };
+  const labels = previews.map(p =>
+    `${p.index}안 ${names[p.key]} (${_fmtSignedWon(p.result.amt, 1, '')}, ${p.result.rounds}회)${p.key === 'balanced' ? ' ★' : ''}`
+  );
+  const eff = previews.map(p => p.result.efficiency);
+  const op = previews.map(p => p.result.opAnnual);
+  const churn = previews.map(p => Math.round(p.result.churn * 10) / 10);
   charts['chartScenarios'] = new Chart(el, {
     type: 'bar',
     data: {
@@ -8440,8 +8836,7 @@ function renderScenarioChart() {
       datasets: [
         { label: '회당 효율 (원/회)', data: eff.map(v => Math.round(v*10)/10), backgroundColor: C.gold, borderRadius: 4 },
         { label: '연간 OP (억)',      data: op,    backgroundColor: C.navy, borderRadius: 4 },
-        { label: '이탈률 (%)',        data: churn, backgroundColor: C.red,  borderRadius: 4 },
-        { label: `Spread Gap (사업계획 ${planAmt}원 대비, 원/kg)`, data: spread, backgroundColor: '#94a3b8', borderRadius: 4 }
+        { label: '이탈률 (%)',        data: churn, backgroundColor: C.red,  borderRadius: 4 }
       ]
     },
     options: {
@@ -8451,30 +8846,18 @@ function renderScenarioChart() {
         legend: { position: 'bottom', labels: { font: { size: 12 }, boxWidth: 14 } },
         datalabels: {
           display: true,
-          anchor: function(ctx) {
-            // 음수 값은 anchor를 start, align bottom으로
-            const v = ctx.dataset.data[ctx.dataIndex];
-            if (ctx.datasetIndex === 3 && v < 0) return 'start';
-            return 'end';
-          },
-          align: function(ctx) {
-            const v = ctx.dataset.data[ctx.dataIndex];
-            if (ctx.datasetIndex === 3 && v < 0) return 'bottom';
-            return 'top';
-          },
+          anchor: 'end',
+          align: 'top',
           offset: 4,
           font: { size: 13, weight: 700 },
-          color: function(ctx) { return [C.gold, C.navy, C.red, '#475569'][ctx.datasetIndex]; },
+          color: function(ctx) { return [C.gold, C.navy, C.red][ctx.datasetIndex]; },
           formatter: function(v, ctx) {
             // 소수점 1자리로 정규화 (부동소수점 노이즈 제거)
             const rounded = Math.round(v * 10) / 10;
             if (ctx.datasetIndex === 0) return _fmtSignedWon(rounded);
             if (ctx.datasetIndex === 1) return _fmtSignedOku(rounded);
             if (ctx.datasetIndex === 2) return `${rounded}%`;
-            // Spread Gap (원/kg): 양수=부족, 0=달성, 음수=초과 (소수점 1자리)
-            if (Math.abs(rounded) < 0.05) return '✓ 달성';
-            if (rounded > 0) return `+${rounded.toFixed(1)}원`;
-            return `${rounded.toFixed(1)}원`;
+            return rounded;
           }
         }
       },
@@ -8484,7 +8867,6 @@ function renderScenarioChart() {
       }
     }
   });
-  if (sc) _updateScenarioCards(sc);
 }
 
 /* === 시나리오별 월별 OP 라인차트 === */
@@ -8492,45 +8874,44 @@ function renderScenariosMonthly() {
   const el = document.getElementById('chartScenariosMonthly');
   if (!el) return;
   destroyChart('chartScenariosMonthly');
-  const sc = _scenarioFromData();
-  let baseMonthly, planMonthly;
-  if (DATA.loaded && DATA.agg.outlook.byMetric.op) {
-    baseMonthly = DATA.agg.outlook.byMetric.op.months.map(v => v / 1e8);
-  } else {
-    baseMonthly = [3.5, 3.2, -3.0, 3.6, 4.2, 2.0, 6.6, 7.0, 0.0, 8.4, 8.4, 2.8];
+  const summaryEl = document.getElementById('scenarioMonthlySummary');
+  const previews = _getScenarioPreviewSet();
+  const hasMonthlyData = _hasUploadedScenarioData() && DATA.agg.outlook.byMetric.op && DATA.agg.plan.byMetric.op;
+  if (!previews || !hasMonthlyData) {
+    _drawUploadRequiredCanvas(el, '현황 진단 업로드 후 표시됩니다.');
+    if (summaryEl) summaryEl.innerHTML = '';
+    return;
   }
-  if (DATA.loaded && DATA.agg.plan.byMetric.op) {
-    planMonthly = DATA.agg.plan.byMetric.op.months.map(v => v / 1e8);
-  } else {
-    planMonthly = [5.8, 3.3, -2.8, 3.6, 8.4, 4.0, 8.5, 8.9, 1.9, 10.4, 10.4, 4.9];
-  }
-  const actualUntil = (DATA.loaded && DATA.currentMonth > 0) ? DATA.currentMonth : 4;
+  const baseMonthly = DATA.agg.outlook.byMetric.op.months.map(v => v / 1e8);
+  const planMonthly = DATA.agg.plan.byMetric.op.months.map(v => v / 1e8);
+  const actualUntil = (DATA.currentMonth > 0) ? DATA.currentMonth : 0;
 
-  // 룰 기반 회차/시점 사용 (각 시나리오는 splitAmountByRule + buildScheduleMonths)
-  function applyScenarioByRule(amt) {
+  // 룰 기반 회차/시점 사용 (각 시나리오는 compute()의 현재 설정값과 동일하게 적용)
+  function applyScenarioByRule(preview) {
     // v40: 판가 인상 효과는 비연동 물량에만 적용
     //   - DATA.aggNonLinked 우선 사용 (비연동 SKU만의 월별 물량)
-    //   - 없으면 전체 물량 사용 (fallback)
-    const volSource = (DATA.loaded && DATA.aggNonLinked?.outlook?.byMetric?.qty?.months)
+    //   - 없으면 전체 업로드 물량 사용
+    const volSource = (DATA.aggNonLinked?.outlook?.byMetric?.qty?.months)
       ? DATA.aggNonLinked.outlook.byMetric.qty.months
-      : (DATA.loaded && DATA.agg.outlook.byMetric.qty)
+      : (DATA.agg.outlook.byMetric.qty)
         ? DATA.agg.outlook.byMetric.qty.months
-        : Array(12).fill(125e6);
+        : null;
+    if (!volSource) return baseMonthly.slice();
     const vol = volSource;
-    const split = splitAmountByRule(amt);
-    const months = buildScheduleMonths(5, split.length);  // 1차=5월
+    const r = preview.result;
+    const split = (r.scheduleAmounts && r.scheduleAmounts.length) ? r.scheduleAmounts : splitAmountByRule(r.amt);
+    const months = (r.scheduleMonths && r.scheduleMonths.length) ? r.scheduleMonths : buildScheduleMonths(_getConfiguredStartMonth(), split.length);
+    const recovery = _getRecoveryRate();
     const result = [];
     for (let m = 1; m <= 12; m++) {
       let cumAmt = 0;
       split.forEach((a, i) => { if (m >= months[i]) cumAmt += a; });
-      const lift = cumAmt * vol[m-1] * 0.80 / 1e8;
+      const lift = cumAmt * vol[m-1] * recovery / 1e8;
       result.push(baseMonthly[m-1] + lift);
     }
     return result;
   }
-  const s1 = sc ? applyScenarioByRule(sc.s1.amt) : baseMonthly.map((v,i) => v + (i>=4 ? 0.6 : 0));
-  const s2 = sc ? applyScenarioByRule(sc.s2.amt) : baseMonthly.map((v,i) => v + (i>=4 ? 1.2 : 0));
-  const s3 = sc ? applyScenarioByRule(sc.s3.amt) : baseMonthly.map((v,i) => v + (i>=4 ? 1.8 : 0));
+  const [s1, s2, s3] = previews.map(applyScenarioByRule);
 
   // 선택된 시나리오 결정
   const selectedKey = STATE.scenario || 'balanced';
@@ -8539,6 +8920,9 @@ function renderScenariosMonthly() {
   const selectedSeries = scenarioSeries[selectedIdx] || s2;
   const scenarioLabels = ['1안 보수', '2안 균형 (권장)', '3안 적극'];
   const scenarioColors = [C.navy2, C.gold, C.red];
+  const actualMarker = actualUntil > 0
+    ? [{ x: actualUntil - 0.5, label: '실적 / 추정', color: '#64748b', dash: [4, 4], labelPos: 'bottom' }]
+    : [];
 
   charts['chartScenariosMonthly'] = new Chart(el, {
     type: 'line',
@@ -8556,7 +8940,7 @@ function renderScenariosMonthly() {
           label: '기준 손익 (실적/Outlook)',
           data: baseMonthly.map(v => Math.round(v*10)/10),
           borderColor: '#94a3b8', backgroundColor: 'transparent', borderWidth: 1.4,
-          segment: { borderDash: ctx => ctx.p0DataIndex >= actualUntil - 1 ? [4,4] : [] },
+          segment: { borderDash: ctx => actualUntil > 0 && ctx.p0DataIndex >= actualUntil - 1 ? [4,4] : [] },
           tension: 0.3, pointRadius: 2.5, pointBackgroundColor: '#fff', pointBorderColor: '#94a3b8', fill: false,
           datalabels: { display: false }
         },
@@ -8599,8 +8983,8 @@ function renderScenariosMonthly() {
             // 선택된 시나리오(데이터셋 2~4)에는 모든 월 금액 표시
             return ctx.datasetIndex === selectedIdx + 2;
           },
-          align: function(ctx) { return ctx.dataIndex <= actualUntil - 1 ? 'bottom' : 'top'; },
-          anchor: function(ctx) { return ctx.dataIndex <= actualUntil - 1 ? 'start' : 'end'; },
+          align: function(ctx) { return actualUntil > 0 && ctx.dataIndex <= actualUntil - 1 ? 'bottom' : 'top'; },
+          anchor: function(ctx) { return actualUntil > 0 && ctx.dataIndex <= actualUntil - 1 ? 'start' : 'end'; },
           offset: 7,
           backgroundColor: function(ctx) { return scenarioColors[selectedIdx] || C.gold; },
           color: '#fff',
@@ -8609,7 +8993,7 @@ function renderScenariosMonthly() {
           font: { size: 9.2, weight: 600 },
           formatter: (v, ctx) => `${ctx.dataIndex + 1}월 ${v.toFixed(1)}`
         },
-        verticalMarkers: { markers: [{ x: actualUntil - 0.5, label: '실적 / 추정', color: '#64748b', dash: [4, 4], labelPos: 'bottom' }] }
+        verticalMarkers: { markers: actualMarker }
       },
       scales: {
         y: { beginAtZero: false, grid: { color: C.line }, title: { display: true, text: 'OP (억원)', font: { size: 10 } } },
@@ -8618,7 +9002,6 @@ function renderScenariosMonthly() {
     }
   });
 
-  const summaryEl = document.getElementById('scenarioMonthlySummary');
   if (summaryEl) {
     const planTotal = planMonthly.reduce((s, v) => s + v, 0);
     const selTotal = selectedSeries.reduce((s, v) => s + v, 0);
@@ -8627,8 +9010,11 @@ function renderScenariosMonthly() {
     const planRow = ['사업계획 목표', ...planMonthly.map(v => `${v.toFixed(1)}억`)];
     const selectedRow = [`${scenarioLabels[selectedIdx]} OP`, ...selectedSeries.map(v => `${v.toFixed(1)}억`)];
     const cell = (v, i) => `<td style="white-space:nowrap; text-align:${i === 0 ? 'left' : 'right'}; padding:4px 6px; ${i > 0 && typeRow[i] === '실적' ? 'background:#f8fafc;' : ''}">${v}</td>`;
+    const periodText = actualUntil > 0
+      ? `1~${actualUntil}월은 실적, ${actualUntil+1}~12월은 추정`
+      : '실적 마감월 미인식';
     summaryEl.innerHTML = `
-      <div style="margin-bottom:6px; font-weight:700; color:var(--ink);">사업계획 목표 합계 <span style="color:var(--gold);">${planTotal.toFixed(1)}억</span> · 선택 시나리오 예상 OP 합계 <span style="color:${scenarioColors[selectedIdx]};">${selTotal.toFixed(1)}억</span> · 1~${actualUntil}월은 실적, ${actualUntil+1}~12월은 추정</div>
+      <div style="margin-bottom:6px; font-weight:700; color:var(--ink);">사업계획 목표 합계 <span style="color:var(--gold);">${planTotal.toFixed(1)}억</span> · 선택 시나리오 예상 OP 합계 <span style="color:${scenarioColors[selectedIdx]};">${selTotal.toFixed(1)}억</span> · ${periodText}</div>
       <table class="tbl" style="font-size:10.5px; min-width:860px; margin:0;">
         <tbody>
           <tr>${header.map(cell).join('')}</tr>
@@ -8722,6 +9108,20 @@ const VERTICAL_MARKER_PLUGIN = {
 
 function renderDecisionCharts() {
   if (!_prepareCurrentPricingLevelForRender()) return;
+  if (!DATA.loaded || !DATA.agg) {
+    ['chartMonthly', 'chartCats'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) {
+        destroyChart(id);
+        _drawUploadRequiredCanvas(el, '현황 진단 업로드 후 표시됩니다.');
+      }
+    });
+    const mSub = document.getElementById('chartMonthlySub');
+    const cSub = document.getElementById('chartCatsSub');
+    if (mSub) mSub.textContent = '업로드 후 산출';
+    if (cSub) cSub.textContent = '업로드 후 산출';
+    return;
+  }
   const r = compute();
 
   /* ============ 1. 월별 OP 추이 (3선 + 가격 조정 시점 마커) ============ */
@@ -8893,6 +9293,11 @@ function _applyCatExclusionsToState() {
 }
 
 function toggleCatPriceApply(cat, checked) {
+  if (!(DATA.loaded && DATA.agg)) {
+    showToast('현황 진단 업로드 후 조정 단위를 변경할 수 있습니다.', 'warn');
+    renderManualCatInputs();
+    return;
+  }
   _ensureCatNoIncreaseState();
   const active = !!checked;
   const r = compute();
@@ -8926,7 +9331,7 @@ function _getCatVolumeWeights() {
   _getPricingGroups().forEach(g => {
     let q = Number(g.qty || 0);
     if (!q && DATA.loaded && DATA.agg && DATA.agg.outlook.byCategory[g.cat]?.qty) q = DATA.agg.outlook.byCategory[g.cat].qty.total;
-    if (!q) q = DPDS_DEFAULT_CAT_QTY[g.cat] || 0;
+    if (!q && !(DATA.loaded && DATA.agg)) q = 0;
     weights[g.key] = q;
     total += q;
   });
@@ -8944,6 +9349,25 @@ function _avgFromCatAmounts(catAmounts) {
 
 /* === MODE 1 표시 갱신 (역산 결과 표시 + MODE 2 평균 반영) === */
 function _updateMode1Display() {
+  const result = document.getElementById('revOpResult');
+  const detail = document.getElementById('revOpDetail');
+  if (!(DATA.loaded && DATA.agg)) {
+    if (result) {
+      result.textContent = '산출전';
+      result.style.color = 'var(--ink-3)';
+    }
+    if (detail) detail.textContent = '현황 진단 업로드 후 표시됩니다.';
+    const targetEl = document.getElementById('revTargetOp');
+    if (targetEl && !targetEl.dataset.userEdited) targetEl.value = '';
+    return;
+  }
+
+  const planTargetOp = (DATA.agg.plan?.byMetric?.op?.total || 0) / 1e8;
+  const targetEl = document.getElementById('revTargetOp');
+  if (targetEl && !targetEl.dataset.userEdited && !targetEl.value && Number.isFinite(planTargetOp) && planTargetOp > 0) {
+    targetEl.value = String(Math.round(planTargetOp * 10) / 10);
+  }
+
   // 현재 catManualAmounts 평균 (없으면 슬라이더 amt)
   let avgAmt;
   let label = '';
@@ -8955,15 +9379,18 @@ function _updateMode1Display() {
     avgAmt = r.amt;
     label = '시나리오 권고 평균';
   }
-  const result = document.getElementById('revOpResult');
-  const detail = document.getElementById('revOpDetail');
   // 환산: 평균 조정폭으로부터 예상 OP 산출
   const recovery = parseFloat(document.getElementById('revRecovery')?.value || 80) / 100;
-  let totalQty, outlookOp;
-  if (DATA.loaded && DATA.agg) {
-    totalQty = DATA.agg.outlook.byMetric.qty?.total || 1.5e9;
-    outlookOp = (DATA.agg.outlook.byMetric.op?.total || 0) / 1e8;
-  } else { totalQty = 940e6; outlookOp = 25; }
+  const totalQty = DATA.agg.outlook.byMetric.qty?.total || 0;
+  const outlookOp = (DATA.agg.outlook.byMetric.op?.total || 0) / 1e8;
+  if (!(totalQty > 0)) {
+    if (result) {
+      result.textContent = '산출전';
+      result.style.color = 'var(--ink-3)';
+    }
+    if (detail) detail.textContent = '전망 판매량 업로드 후 표시됩니다.';
+    return;
+  }
   const expectedOp = (avgAmt * totalQty * recovery) / 1e8 + outlookOp;
 
   if (result) {
@@ -8975,7 +9402,6 @@ function _updateMode1Display() {
     detail.innerHTML = `${label}<br><span style="font-size: 9.5px;">전망 ${volMt.toFixed(0)}천톤 × 환원율 ${(recovery*100).toFixed(0)}% → 예상 OP ${expectedOp.toFixed(1)}억</span>`;
   }
   // 목표 OP 입력값을 역으로 권장값 표시 (참고용)
-  const targetEl = document.getElementById('revTargetOp');
   if (targetEl && !targetEl.dataset.userEdited) {
     // 사용자가 직접 수정하지 않은 경우에만 표시 권장값 갱신
     // (의도적으로 목표값은 사용자가 정하는 것이라 자동 변경하지 않음)
@@ -8984,21 +9410,40 @@ function _updateMode1Display() {
 
 /* === MODE 1 → MODE 2,3 다운스트림 동기화 (목표 OP/환원율 변경 시) === */
 function _syncFromMode1ToMode23() {
-  const targetOp = parseFloat(document.getElementById('revTargetOp')?.value || 113);
+  const targetEl = document.getElementById('revTargetOp');
+  const result = document.getElementById('revOpResult');
+  const detail = document.getElementById('revOpDetail');
+  if (!(DATA.loaded && DATA.agg)) {
+    if (result) {
+      result.textContent = '산출전';
+      result.style.color = 'var(--ink-3)';
+    }
+    if (detail) detail.textContent = '현황 진단 업로드 후 계산됩니다.';
+    return;
+  }
+
+  const planTargetOp = (DATA.agg.plan?.byMetric?.op?.total || 0) / 1e8;
+  if (targetEl && !targetEl.dataset.userEdited && !targetEl.value && Number.isFinite(planTargetOp) && planTargetOp > 0) {
+    targetEl.value = String(Math.round(planTargetOp * 10) / 10);
+  }
+  const targetOp = parseFloat(targetEl?.value || '');
   const recovery = parseFloat(document.getElementById('revRecovery')?.value || 80) / 100;
-  let outlookOp, totalQty;
-  if (DATA.loaded && DATA.agg) {
-    outlookOp = (DATA.agg.outlook.byMetric.op?.total || 0) / 1e8;
-    totalQty = DATA.agg.outlook.byMetric.qty?.total || 1.5e9;
-  } else { outlookOp = 25; totalQty = 940e6; }
+  const outlookOp = (DATA.agg.outlook.byMetric.op?.total || 0) / 1e8;
+  const totalQty = DATA.agg.outlook.byMetric.qty?.total || 0;
+  if (!Number.isFinite(targetOp) || !(totalQty > 0)) {
+    if (result) {
+      result.textContent = '산출전';
+      result.style.color = 'var(--ink-3)';
+    }
+    if (detail) detail.textContent = !Number.isFinite(targetOp) ? '목표 OP 입력 후 계산됩니다.' : '전망 판매량 업로드 후 계산됩니다.';
+    return;
+  }
   const opGapWon = (targetOp - outlookOp) * 1e8;
   let requiredAmt = totalQty > 0 && recovery > 0 ? opGapWon / (totalQty * recovery) : 0;
   // 목표 대비 초과 손익이면 음수 조정폭(가격 인하 여력)으로 표시
   if (!isFinite(requiredAmt)) requiredAmt = 0;
 
   // MODE 1 결과 표시
-  const result = document.getElementById('revOpResult');
-  const detail = document.getElementById('revOpDetail');
   if (result) {
     result.innerHTML = `${_fmtSignedWon(requiredAmt, 1, '')}<span style="font-size: 12px; color: var(--ink-3);"> 원/kg</span>`;
     result.style.color = _adjustmentColor(requiredAmt);
@@ -9023,6 +9468,12 @@ function _syncFromMode1ToMode23() {
 
 /* === MODE 2 → MODE 1,3 동기화 (축종별 입력 변경 시) === */
 function _syncFromMode2ToMode13() {
+  if (!(DATA.loaded && DATA.agg)) {
+    _updateMode1Display();
+    recalcManualOpEstimate();
+    _renderFinalCharts();
+    return;
+  }
   // MODE 2 가중평균을 MODE 3 회차 재분할에 사용
   const avgAmt = _avgFromCatAmounts(_getFinalCatAmounts());
   // MODE 3은 자동 룰 재산출 (사용자가 수기 회차 편집 중이 아니면)
@@ -9038,8 +9489,8 @@ function _syncFromMode2ToMode13() {
     } else if (Math.abs(avgAmt) > 0.0001) {
       // 기존 합이 0이거나 비어있는데 새 평균이 있으면 룰 자동 재산출
       const autoSplit = splitAmountByRule(Math.round(avgAmt), _getMaxPerRound());
-      // 시작월: 기존 1차 월 → 없으면 데이터 기반(currentMonth+2) → 그것도 없으면 5월
-      const dataFloor = (DATA.loaded && DATA.currentMonth > 0) ? DATA.currentMonth + 2 : 5;
+      // 시작월: 기존 1차 월 → 없으면 데이터 기반(currentMonth+2) → 설정 시작월
+      const dataFloor = (DATA.currentMonth > 0) ? DATA.currentMonth + 2 : _getConfiguredStartMonth();
       const startM = STATE.manualSchedule[0]?.month || dataFloor;
       STATE.manualSchedule = autoSplit.map((a, i) => ({
         round: i+1, amt: a,
@@ -9059,6 +9510,7 @@ function _syncFromMode2ToMode13() {
 /* === MODE 3 → MODE 1,2 동기화 (회차 입력 변경 시) === */
 function _syncFromMode3ToMode12() {
   if (!STATE.manualSchedule || !Array.isArray(STATE.manualSchedule) || STATE.manualSchedule.length === 0) return;
+  if (!(DATA.loaded && DATA.agg)) return;
   // 총합 산출
   const totalAmt = STATE.manualSchedule.reduce((s, x) => s + (x.amt || 0), 0);
   // MODE 2: 총합을 축종별 권고 비율로 재배분
@@ -9089,6 +9541,11 @@ function renderManualCatInputs() {
   const wrap = document.getElementById('catManualInputs');
   if (!wrap) return;
   _renderPricingGroupLevelSwitch();
+  if (!(DATA.loaded && DATA.agg)) {
+    wrap.innerHTML = `<div style="padding: 12px; border: 1px dashed var(--line-2); border-radius: 6px; color: var(--ink-3); font-size: 12px; text-align: center;">현황 진단 업로드 후 조정폭을 표시합니다.</div>`;
+    recalcManualOpEstimate();
+    return;
+  }
   const r = compute();
   const recommended = _getCatRecommendedAmounts(r.amt);
   const rawDisplay = STATE.catManualAmounts || recommended;
@@ -9119,6 +9576,11 @@ function renderManualCatInputs() {
 }
 
 function updateManualCatAmount(cat, val) {
+  if (!(DATA.loaded && DATA.agg)) {
+    showToast('현황 진단 업로드 후 조정폭을 입력할 수 있습니다.', 'warn');
+    renderManualCatInputs();
+    return;
+  }
   if (!_isCatPriceActive(cat)) {
     showToast(`${_getPricingGroupLabel(cat, true)}은(는) 조정 미적용 상태입니다. 적용 체크 후 조정하세요.`, 'warn');
     return;
@@ -9141,6 +9603,20 @@ function updateManualCatAmount(cat, val) {
 
 /* === 수기 입력 → 예상 OP 계산 (수기값 없으면 권고값 기준 산출) === */
 function recalcManualOpEstimate() {
+  const expEl = document.getElementById('manualExpectedOp');
+  const achEl = document.getElementById('manualAchievement');
+  if (!(DATA.loaded && DATA.agg)) {
+    if (expEl) {
+      expEl.textContent = '산출전';
+      expEl.style.color = 'var(--ink-3)';
+    }
+    if (achEl) {
+      achEl.textContent = '산출전';
+      achEl.style.color = 'var(--ink-3)';
+    }
+    return;
+  }
+
   const r = compute();
   const recommended = _getCatRecommendedAmounts(r.amt);
   const amounts = _getFinalCatAmounts(r);
@@ -9154,24 +9630,31 @@ function recalcManualOpEstimate() {
     } else if (DATA.loaded && DATA.agg.outlook.byCategory[g.cat]?.qty) {
       qty = DATA.agg.outlook.byCategory[g.cat].qty.total;
     } else {
-      qty = DPDS_DEFAULT_CAT_QTY[g.cat];
+      qty = 0;
     }
     const amt = amounts[c] || 0;
     totalOp += amt * qty * recovery; // 원
   });
   const totalOpOku = totalOp / 1e8;
-  const targetOp = parseFloat(document.getElementById('revTargetOp')?.value || 113);
-  // 현재 OP 격차 (목표 - 전망)
-  let outlookOp = 0;
-  if (DATA.loaded && DATA.agg.outlook.byMetric.op) {
-    outlookOp = DATA.agg.outlook.byMetric.op.total / 1e8;
-  } else {
-    outlookOp = 25;
+  const inputTargetOp = parseFloat(document.getElementById('revTargetOp')?.value || '');
+  const planTargetOp = (DATA.agg.plan?.byMetric?.op?.total || 0) / 1e8;
+  const targetOp = Number.isFinite(inputTargetOp) ? inputTargetOp : planTargetOp;
+  if (!(targetOp > 0)) {
+    if (expEl) {
+      expEl.textContent = '산출전';
+      expEl.style.color = 'var(--ink-3)';
+    }
+    if (achEl) {
+      achEl.textContent = '산출전';
+      achEl.style.color = 'var(--ink-3)';
+    }
+    _renderFinalCharts();
+    return;
   }
+  // 현재 OP 격차 (목표 - 전망)
+  const outlookOp = (DATA.agg.outlook.byMetric.op?.total || 0) / 1e8;
   const opGap = targetOp - outlookOp;
   const ach = opGap > 0 ? Math.min(150, Math.round(totalOpOku / opGap * 100)) : 100;
-  const expEl = document.getElementById('manualExpectedOp');
-  const achEl = document.getElementById('manualAchievement');
   if (expEl) {
     // 인상(양수) → 녹색 / 인하(음수) → 골드 / 동결 → 회색
     const opColor = totalOpOku > 0.05 ? 'var(--success)' : (totalOpOku < -0.05 ? 'var(--gold)' : 'var(--ink-3)');
@@ -9662,6 +10145,16 @@ function renderScenarioBanner() {
   const titleEl = document.getElementById('scenarioBannerTitle');
   const kpiEl = document.getElementById('scenarioBannerKpi');
   if (!titleEl) return;
+  if (!(DATA.loaded && DATA.agg)) {
+    titleEl.textContent = '현황 진단 업로드 후 시나리오 산출';
+    if (kpiEl) {
+      kpiEl.innerHTML = `
+        <div><span style="color: #94a3b8;">예상 OP 영향</span> <strong style="color: var(--gold); font-size: 14px;">산출전</strong></div>
+        <div><span style="color: #94a3b8;">달성률</span> <strong style="color: var(--gold); font-size: 14px;">산출전</strong></div>
+      `;
+    }
+    return;
+  }
   const r = compute();
   const scen = PRESETS[STATE.scenario];
   const scenName = scen ? `${scen.num} ${scen.name}` : '커스텀 (5축 수동 조정)';
@@ -9830,7 +10323,7 @@ function _getPricingGroups() {
     subLabel: '',
     qty: DATA.loaded && DATA.agg?.outlook?.byCategory?.[cat]?.qty
       ? DATA.agg.outlook.byCategory[cat].qty.total
-      : (DPDS_DEFAULT_CAT_QTY[cat] || 0)
+      : 0
   }));
 }
 
@@ -9976,7 +10469,7 @@ function _getOpDataBundle(cat) {
       if (o?.months) outlookMonthly = o.months.map(v => v / 1e8);
       planTotalOku = (p?.total || 0) / 1e8;
       outlookTotalOku = (o?.total || 0) / 1e8;
-      qty = DATA.agg.outlook?.byMetric?.qty?.total || Object.values(DPDS_DEFAULT_CAT_QTY).reduce((s, v) => s + v, 0);
+      qty = DATA.agg.outlook?.byMetric?.qty?.total || 0;
       // v40: 비연동 전망 물량 (판가 추가 OP 산출에 사용)
       qtyNonLinked = DATA.aggNonLinked?.outlook?.byMetric?.qty?.total || qty;
     } else if (String(cat).includes('|')) {
@@ -10014,15 +10507,7 @@ function _getOpDataBundle(cat) {
         : isSmallKey
         ? DATA.aggNonLinked?.outlook?.bySmall?.[cat]?.metrics?.qty?.total
         : DATA.aggNonLinked?.outlook?.byMid?.[cat]?.metrics?.qty?.total) || qty;
-      if (!p && !o) {
-        const w = DPDS_DEFAULT_CAT_WEIGHT[parentCat] || 0.25;
-        planMonthly = DPDS_DEFAULT_MONTHLY_PLAN.map(v => v * w);
-        outlookMonthly = DPDS_DEFAULT_MONTHLY_OUTLOOK.map(v => v * w);
-        planTotalOku = planMonthly.reduce((s, v) => s + v, 0);
-        outlookTotalOku = outlookMonthly.reduce((s, v) => s + v, 0);
-        qty = DPDS_DEFAULT_CAT_QTY[parentCat] || 0;
-        qtyNonLinked = qty;
-      }
+      if (!p && !o) qtyNonLinked = 0;
     } else {
       const p = DATA.agg.plan?.byCategory?.[cat]?.op;
       const o = DATA.agg.outlook?.byCategory?.[cat]?.op;
@@ -10030,44 +10515,13 @@ function _getOpDataBundle(cat) {
       if (o?.months) outlookMonthly = o.months.map(v => v / 1e8);
       planTotalOku = (p?.total || 0) / 1e8;
       outlookTotalOku = (o?.total || 0) / 1e8;
-      qty = DATA.agg.outlook?.byCategory?.[cat]?.qty?.total || DPDS_DEFAULT_CAT_QTY[cat] || 0;
+      qty = DATA.agg.outlook?.byCategory?.[cat]?.qty?.total || 0;
       // v40: 해당 축종의 비연동 전망 물량
       qtyNonLinked = DATA.aggNonLinked?.outlook?.byCategory?.[cat]?.qty?.total || qty;
-      // 해당 축종 데이터가 없는 경우 전체 시연 데이터를 판매량 비중으로 축소 표시
-      if (!p && !o) {
-        const w = DPDS_DEFAULT_CAT_WEIGHT[cat] || 0.25;
-        planMonthly = DPDS_DEFAULT_MONTHLY_PLAN.map(v => v * w);
-        outlookMonthly = DPDS_DEFAULT_MONTHLY_OUTLOOK.map(v => v * w);
-        planTotalOku = planMonthly.reduce((s, v) => s + v, 0);
-        outlookTotalOku = outlookMonthly.reduce((s, v) => s + v, 0);
-      }
+      if (!p && !o) qtyNonLinked = 0;
     }
   } else {
-    if (cat === '전체') {
-      planMonthly = DPDS_DEFAULT_MONTHLY_PLAN.slice();
-      outlookMonthly = DPDS_DEFAULT_MONTHLY_OUTLOOK.slice();
-      planTotalOku = 113;
-      outlookTotalOku = 25;
-      qty = Object.values(DPDS_DEFAULT_CAT_QTY).reduce((s, v) => s + v, 0);
-      qtyNonLinked = qty;
-    } else if (String(cat).includes('|')) {
-      const parentCat = _getParentCatFromGroupKey(cat);
-      const w = DPDS_DEFAULT_CAT_WEIGHT[parentCat] || 0.25;
-      planMonthly = DPDS_DEFAULT_MONTHLY_PLAN.map(v => v * w);
-      outlookMonthly = DPDS_DEFAULT_MONTHLY_OUTLOOK.map(v => v * w);
-      planTotalOku = planMonthly.reduce((s, v) => s + v, 0);
-      outlookTotalOku = outlookMonthly.reduce((s, v) => s + v, 0);
-      qty = DPDS_DEFAULT_CAT_QTY[parentCat] || 0;
-      qtyNonLinked = qty;
-    } else {
-      const w = DPDS_DEFAULT_CAT_WEIGHT[cat] || 0.25;
-      planMonthly = DPDS_DEFAULT_MONTHLY_PLAN.map(v => v * w);
-      outlookMonthly = DPDS_DEFAULT_MONTHLY_OUTLOOK.map(v => v * w);
-      planTotalOku = planMonthly.reduce((s, v) => s + v, 0);
-      outlookTotalOku = outlookMonthly.reduce((s, v) => s + v, 0);
-      qty = DPDS_DEFAULT_CAT_QTY[cat] || 0;
-      qtyNonLinked = qty;
-    }
+    // 업로드 전에는 예시 월별 OP/물량을 생성하지 않는다.
   }
   // v40: 비연동 비중 계산 (사용자가 디버그용으로 확인 가능)
   const nlRatio = qty > 0 ? qtyNonLinked / qty : 1;
@@ -10423,6 +10877,17 @@ function _renderFinalCharts() {
   const elM = document.getElementById('chartFinalMonthlyOp');
   const elC = document.getElementById('chartFinalCatAmt');
   if (!elM && !elC) return;  // 의사결정 페이지가 아니면 skip
+  if (!(DATA.loaded && DATA.agg)) {
+    if (elM) {
+      destroyChart('chartFinalMonthlyOp');
+      _drawUploadRequiredCanvas(elM, '현황 진단 업로드 후 표시됩니다.');
+    }
+    if (elC) {
+      destroyChart('chartFinalCatAmt');
+      _drawUploadRequiredCanvas(elC, '현황 진단 업로드 후 표시됩니다.');
+    }
+    return;
+  }
 
   const r = compute();
   const finalCats = _getFinalCatAmounts(r);
@@ -10794,7 +11259,7 @@ function handleTrackingUpload(event) {
         law: '§40 OK',
         actionClass: result.status === 'complete' ? 'pos' : 'warn'
       });
-      if (STATE.decisions.length > 2000) STATE.decisions = STATE.decisions.slice(0, 2000);
+      dpdsTrimDecisions();
 
       // UI 갱신
       renderTrackingBaseline();
@@ -11048,7 +11513,7 @@ function exportComplianceReport() {
     [1, '경쟁사 가격 자동 반영 금지', '준수', '5축 슬라이더 모두 자사 BOM·ERP 기반. 경쟁사 판가 입력 필드 부재', 'FORMULA_LOCK_2026Q2 봉인 산식 (CBOT/대두/환율/BDI 4개 외부 지표만)'],
     [2, '경쟁사 가격 추종 로직 금지', '준수', '"경쟁사 X사 인상 시 자동 추종" if-then 로직 시스템 전체 부재', 'code review 가능: 모든 슬라이더는 자사 OP 격차·이탈률 기반'],
     [3, '업계 공동 데이터 활용 최소화', '준수', '업로드 데이터는 자사 ERP 단일 출처. 외부 통합 AI 미연동', '자사 템플릿 형식만 허용 — 업계 공유 파일 미지원'],
-    [4, '가격결정 근거 자사 손익 중심', '준수', '역산 도구: 자사 사업계획 OP 113억에서 조정폭 산출. 시장 평균 산식 부재', '의사결정 보드 KPI 4종 모두 자사 데이터 파생'],
+    [4, '가격결정 근거 자사 손익 중심', '준수', '역산 도구: 업로드된 자사 사업계획 OP에서 조정폭 산출. 시장 평균 산식 부재', '의사결정 보드 KPI 4종 모두 자사 데이터 파생'],
     [5, '최종 의사결정 독립 수행', '준수', '4단계 결재 워크플로우 (실무→임원→경영진→감사). 경쟁사 협의 루트 부재', '자가진단 c3 필수 통과 + 경영진 진술서 서명'],
     [6, 'AI 추천 + 의사결정 로그 보관', '준수', '슬라이더 조정·결재 액션 시점·사용자·detail 자동 기록. 5년 보관', '감사로그 페이지 → CSV 다운로드 가능'],
     [7, '법규 준수 사전 반영', '준수', '리스크 게이트 8항목 자가 진단 사전 통과 의무. 필수 6개 미통과 시 차단', '본 컴플라이언스 자체 점검 페이지 자체가 §40② 항변 증빙']
@@ -11399,7 +11864,7 @@ const GUIDELINES = [
           ['데이터 업로드', 'ERP 원가·손익 / 공개 시장지표 / 금지정보 자동 점검'],
           ['원가·Spread 분석', '제품별 현재 판가 / 원재료비 / Spread / 목표 Spread / 부족분·<strong>초과분</strong>'],
           ['손익 시뮬레이션', '미조정 / 1회 조정(인상·인하) / 분할 조정 / 조정 지연 시나리오 비교'],
-          ['가격 조정안', 'AI 추천안 — <strong>인하 2종 (-12, -6) / 동결 / 인상 3종 (+8/+18/+23)</strong>'],
+          ['가격 조정안', '업로드 데이터 기반 필요액 산출 · 인하/동결/인상 후보 비교'],
           ['준법 점검', '경쟁사 정보 사용 여부 / 공개정보 출처 확인 / AI 자동결정 여부 / 위원회 검토 / 승인자 / <strong>[인하 시] 변동비 검증·차별 적용 사유 / 약탈가 의도 부재 진술</strong>'],
           ['의사결정 기록', '최종 선택안 (인상·인하·동결) / 선택 사유 / 부서별 의견 / 공정거래 검토 결과 / 승인 이력']
         ]}},
@@ -11763,7 +12228,7 @@ function uploadTeamData(evt) {
         law: '§40 OK',
         actionClass: 'pos'
       });
-      if (STATE.decisions.length > 2000) STATE.decisions = STATE.decisions.slice(0, 2000);
+      dpdsTrimDecisions();
       save();
       renderTeamData();
       renderLog();
@@ -11783,9 +12248,16 @@ function uploadTeamData(evt) {
 <script>/* === execution.js === */
 /* ---------- 14. 실행관리 ---------- */
 function renderExecution() {
-  const r = compute();
   const gateEl = document.getElementById('executionGate');
   const contEl = document.getElementById('executionContent');
+  if (!DATA.loaded || !DATA.agg) {
+    if (gateEl) gateEl.style.display = 'block';
+    if (contEl) contEl.style.display = 'none';
+    const im = document.getElementById('execImpact');
+    if (im) im.innerHTML = '산출전';
+    return;
+  }
+  const r = compute();
   if (STATE.decisionStatus !== 'approve') {
     if (gateEl) gateEl.style.display = 'block';
     if (contEl) contEl.style.display = 'none';
@@ -12173,15 +12645,15 @@ function exportSkuPricingExcel() {
   const aggBy = {};
   sku.skus.forEach(s => {
     const key = _getPricingGroupKeyForSku(s);
-    const label = _getPricingGroupLevel() === 'mid' ? `${s.cat1} · ${s.cat2}` : s.cat1;
-    if (!aggBy[key]) aggBy[key] = { label, skus: 0, rev: 0, op: 0 };
+    const label = _getPricingGroupLabel(key, _getPricingGroupLevel() === 'mid');
+    if (!aggBy[key]) aggBy[key] = { label, recommendedAmt: s.recommendedAmt, finalAmt: s.amt, skus: 0, rev: 0, op: 0 };
     aggBy[key].skus++;
     aggBy[key].rev += s.extraRevWon;
     aggBy[key].op += s.extraOpWon;
   });
-  const aggRows = [[_getPricingGroupLevel() === 'mid' ? '중분류' : '축종','대상SKU수','잔여월매출영향(억)','잔여월OP영향(억)']];
+  const aggRows = [[_getPricingGroupLevel() === 'mid' ? '중분류' : '축종','권고조정폭(원/kg)','최종조정폭(원/kg)','대상SKU수','잔여월매출영향(억)','잔여월OP영향(억)']];
   Object.values(aggBy).forEach(v => {
-    aggRows.push([v.label, v.skus, (v.rev/1e8).toFixed(2), (v.op/1e8).toFixed(2)]);
+    aggRows.push([v.label, Math.round((v.recommendedAmt || 0) * 10) / 10, Math.round((v.finalAmt || 0) * 10) / 10, v.skus, (v.rev/1e8).toFixed(2), (v.op/1e8).toFixed(2)]);
   });
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aggRows), _getPricingGroupLevel() === 'mid' ? '중분류별_집계' : '축종별_집계');
 
@@ -12967,24 +13439,7 @@ function ingestWorkbook(wb, src, fileName) {
       },
       filterApplied: false,  // v39: 메인 집계는 항상 전체 (필터 미적용)
       qtyAdjust: STATE && STATE.catQtyAdjust ? Object.assign({}, STATE.catQtyAdjust) : null,
-      // v35: 목표값 자가진단 — 전체 사업계획 합계 기준
-      targetDiagnosis: (() => {
-        const planQty = aPlan.byMetric?.qty?.total || 0;
-        const planOp = aPlan.byMetric?.op?.total || 0;
-        const planOpRaw = aPlan.byMetric?.opRaw?.total || 0;
-        const qtyDiff = planQty - DPDS_TARGET_QTY_KG;
-        const opDiff = planOp - DPDS_TARGET_OP_WON;
-        const opRawDiff = planOpRaw - DPDS_TARGET_OP_WON;
-        return {
-          targetQty: DPDS_TARGET_QTY_KG,
-          targetOp: DPDS_TARGET_OP_WON,
-          planQty, planOp, planOpRaw,
-          qtyDiff, opDiff, opRawDiff,
-          qtyMatch: Math.abs(qtyDiff) <= DPDS_TARGET_QTY_KG * DPDS_TARGET_TOLERANCE,
-          opMatch: Math.abs(opDiff) <= DPDS_TARGET_OP_WON * DPDS_TARGET_TOLERANCE,
-          opRawMatch: Math.abs(opRawDiff) <= DPDS_TARGET_OP_WON * DPDS_TARGET_TOLERANCE
-        };
-      })()
+      targetDiagnosis: null
     },
     currentMonth: lastM,
     rowsActual: rowsActual.length, rowsExec: rowsExec.length, rowsPlan: rowsPlan.length
@@ -13049,63 +13504,6 @@ function renderUploadValidationContent() {
 
   // ① 시트 매칭 및 행 수
   let html = '';
-
-  // v35: 🎯 목표 자가진단 (최상단) — 사업계획 시트 합계가 사용자 확정 목표값과 일치하는지
-  if (v.targetDiagnosis) {
-    const td = v.targetDiagnosis;
-    const fmt천톤 = n => (n / 1e6).toFixed(1);
-    const fmt억 = n => (n / 1e8).toFixed(2);
-    const fmtPct = (diff, target) => target ? (diff / target * 100).toFixed(1) : '0.0';
-    const matchBadge = ok => ok
-      ? '<span style="background: var(--success); color: white; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 700; white-space: nowrap; display: inline-block;">✓ 일치</span>'
-      : '<span style="background: var(--danger); color: white; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 700; white-space: nowrap; display: inline-block;">✗ 불일치</span>';
-    const allOk = td.qtyMatch && td.opMatch;
-    // v37: 모든 셀에 white-space: nowrap 인라인 적용 + 폰트 11.5px로 축소 + 컬럼 폭 명시
-    html += `<div style="margin-bottom: 14px; padding: 12px 14px; background: ${allOk ? 'linear-gradient(135deg, #ecfdf5, #d1fae5)' : 'linear-gradient(135deg, #fef2f2, #fee2e2)'}; border-left: 4px solid ${allOk ? 'var(--success)' : 'var(--danger)'}; border-radius: 6px; overflow-x: auto;">
-      <div style="font-size: 13px; font-weight: 800; color: ${allOk ? 'var(--success)' : 'var(--danger)'}; margin-bottom: 8px; white-space: normal;">
-        🎯 목표 자가진단 — 사업계획 시트 합계가 사용자 확정 목표값(${fmt천톤(DPDS_TARGET_QTY_KG)}천톤·${fmt억(DPDS_TARGET_OP_WON)}억)과 일치하는가
-      </div>
-      <table class="target-diag-tbl" style="width: 100%; min-width: 580px; font-size: 11.5px; border-collapse: collapse; font-variant-numeric: tabular-nums;">
-        <thead><tr style="border-bottom: 1px solid rgba(0,0,0,0.1);">
-          <th style="text-align: left; padding: 4px 6px; color: var(--ink-2); white-space: nowrap;">항목</th>
-          <th style="text-align: right; padding: 4px 6px; color: var(--ink-2); white-space: nowrap;">목표값</th>
-          <th style="text-align: right; padding: 4px 6px; color: var(--ink-2); white-space: nowrap;">사업계획 시트 합계</th>
-          <th style="text-align: right; padding: 4px 6px; color: var(--ink-2); white-space: nowrap;">차이</th>
-          <th style="text-align: center; padding: 4px 6px; color: var(--ink-2); white-space: nowrap;">판정</th>
-        </tr></thead>
-        <tbody>
-          <tr>
-            <td style="padding: 4px 6px; font-weight: 700; white-space: nowrap;">판매량</td>
-            <td style="padding: 4px 6px; text-align: right; font-family: var(--font-mono); white-space: nowrap;">${fmt천톤(DPDS_TARGET_QTY_KG)} 천톤</td>
-            <td style="padding: 4px 6px; text-align: right; font-family: var(--font-mono); font-weight: 700; white-space: nowrap;">${fmt천톤(td.planQty)} 천톤</td>
-            <td style="padding: 4px 6px; text-align: right; font-family: var(--font-mono); white-space: nowrap; color: ${Math.abs(td.qtyDiff) > DPDS_TARGET_QTY_KG * DPDS_TARGET_TOLERANCE ? 'var(--danger)' : 'var(--ink-3)'};">${td.qtyDiff >= 0 ? '+' : ''}${fmt천톤(td.qtyDiff)} 천톤 (${fmtPct(td.qtyDiff, DPDS_TARGET_QTY_KG)}%)</td>
-            <td style="padding: 4px 6px; text-align: center; white-space: nowrap;">${matchBadge(td.qtyMatch)}</td>
-          </tr>
-          <tr>
-            <td style="padding: 4px 6px; font-weight: 700; white-space: nowrap;">영업이익 <span style="font-size: 9.5px; font-weight: 400; color: var(--ink-3);">(시스템산출)</span></td>
-            <td style="padding: 4px 6px; text-align: right; font-family: var(--font-mono); white-space: nowrap;">${fmt억(DPDS_TARGET_OP_WON)} 억</td>
-            <td style="padding: 4px 6px; text-align: right; font-family: var(--font-mono); font-weight: 700; white-space: nowrap;">${fmt억(td.planOp)} 억</td>
-            <td style="padding: 4px 6px; text-align: right; font-family: var(--font-mono); white-space: nowrap; color: ${Math.abs(td.opDiff) > DPDS_TARGET_OP_WON * DPDS_TARGET_TOLERANCE ? 'var(--danger)' : 'var(--ink-3)'};">${td.opDiff >= 0 ? '+' : ''}${fmt억(td.opDiff)} 억 (${fmtPct(td.opDiff, DPDS_TARGET_OP_WON)}%)</td>
-            <td style="padding: 4px 6px; text-align: center; white-space: nowrap;">${matchBadge(td.opMatch)}</td>
-          </tr>
-          <tr style="opacity: 0.7;">
-            <td style="padding: 4px 6px; font-weight: 600; font-size: 11px; white-space: nowrap;">영업이익 <span style="font-size: 9.5px; font-weight: 400; color: var(--ink-3);">(ERP원본)</span></td>
-            <td style="padding: 4px 6px; text-align: right; font-family: var(--font-mono); font-size: 11px; white-space: nowrap;">${fmt억(DPDS_TARGET_OP_WON)} 억</td>
-            <td style="padding: 4px 6px; text-align: right; font-family: var(--font-mono); font-size: 11px; white-space: nowrap;">${fmt억(td.planOpRaw)} 억</td>
-            <td style="padding: 4px 6px; text-align: right; font-family: var(--font-mono); font-size: 11px; white-space: nowrap; color: var(--ink-3);">${td.opRawDiff >= 0 ? '+' : ''}${fmt억(td.opRawDiff)} 억 (${fmtPct(td.opRawDiff, DPDS_TARGET_OP_WON)}%)</td>
-            <td style="padding: 4px 6px; text-align: center; font-size: 10px; color: var(--ink-3); white-space: nowrap;">참고용</td>
-          </tr>
-        </tbody>
-      </table>
-      ${allOk
-        ? '<div style="margin-top: 8px; font-size: 11px; color: var(--success);">✅ 사업계획 시트가 정확히 인식되었습니다. 이후 분석은 신뢰 가능합니다.</div>'
-        : `<div style="margin-top: 8px; font-size: 11px; color: var(--danger); line-height: 1.6;">⚠ 사업계획 시트 합계가 목표값과 ${DPDS_TARGET_TOLERANCE * 100}% 이상 차이가 있습니다. 다음을 확인해 주세요:<br>
-          • 사업계획 시트명이 정확한지 (현재 "${v.sheetNames.plan}")<br>
-          • 사업계획 시트에 합계 컬럼(연합계 등)이 추가로 인식되어 중복 합산되었는지<br>
-          • 사업계획 시트에 빈 대분류 행(_)에 합계값이 들어있는지<br>
-          • "비연동 필터"가 ON이면 일부 행이 제외됨 (현재 ${v.filterApplied ? 'ON' : 'OFF'})</div>`}
-    </div>`;
-  }
 
   html += `<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px;">
     <div style="padding: 10px 12px; background: var(--surface-2); border-radius: 6px; border: 1px solid var(--line);">
@@ -13200,7 +13598,7 @@ function renderUploadValidationContent() {
     </details>`;
   }
 
-  html += metricTable('plan', '🎯 사업계획 시트 (목표 OP — 113억 정상)');
+  html += metricTable('plan', '🎯 사업계획 시트 (목표 OP)');
   html += metricTable('actual', '📊 실적 시트');
   html += metricTable('execution', '📋 실행계획 시트');
 
@@ -13372,7 +13770,7 @@ function renderUploadValidationContent() {
   html += `<div style="padding: 10px 12px; background: var(--info-bg); border-left: 3px solid var(--info); border-radius: 4px; font-size: 11px; color: var(--ink-2); line-height: 1.7;">
     <strong style="color: var(--info);">💡 차이가 발견되었을 때 확인 사항</strong><br>
     <strong>① 판매량 불일치:</strong> 시트 이름 매칭 확인 → 비연동 필터가 ON인지 확인(의사결정 보드 ①탭) → Excel 파일의 "연동제" 컬럼 값이 Y/N이 아닌 다른 값이면 파서가 인식 못할 수 있음.<br>
-    <strong>② 영업이익 불일치:</strong> ERP 원본 OP는 본사 공통비·배부비를 포함, 시스템 산출 OP는 매출 − 원재료 − 제조변동 − 제조고정 − 판매변동 − 판매고정 − 일반관리비로 재계산(공통비 제외) → 두 값이 다른 것이 정상. 사용자가 알고 있는 사업계획 113억과 시스템 산출 OP가 일치해야 함.<br>
+    <strong>② 영업이익 불일치:</strong> ERP 원본 OP는 본사 공통비·배부비를 포함, 시스템 산출 OP는 매출 − 원재료 − 제조변동 − 제조고정 − 판매변동 − 판매고정 − 일반관리비로 재계산(공통비 제외) → 두 값이 다를 수 있습니다. 업로드한 사업계획 OP와 시스템 산출 OP의 기준 차이를 확인하세요.<br>
     <strong>③ 행 수 누락:</strong> 시트 1~10행 안에 "대분류" + "손익구분(또는 손익항목)" 컬럼이 함께 있는지 확인. 헤더 위로 빈 행이 너무 많거나, 한 시트에 헤더가 여러 번 반복되면 인식 오류 발생 가능.<br>
     <strong>④ 손익항목 누락:</strong> "판매량 / 순매출액 / 원재료비 / 제조변동비 / 제조고정비 / 판매변동비 / 판매고정비 / 일반관리비 / 영업이익" 9종 명칭이 정확히 일치하는지 확인 (시스템은 "매출액 / 매출 / 원재료" 같은 별칭도 자동 인식).
   </div>`;
@@ -13472,20 +13870,8 @@ function renderStatusCompare() {
     </tr>`;
   };
 
-  // 목표값 자가진단 배너
-  const td = DATA.validation?.targetDiagnosis;
-  let diagBanner = '';
-  if (td) {
-    const allOk = td.qtyMatch && td.opMatch;
-    diagBanner = `<div style="margin-bottom: 14px; padding: 10px 14px; background: ${allOk ? 'linear-gradient(135deg, #ecfdf5, #d1fae5)' : 'linear-gradient(135deg, #fffbeb, #fef3c7)'}; border-left: 4px solid ${allOk ? 'var(--success)' : 'var(--warn)'}; border-radius: 6px; font-size: 12px; line-height: 1.65;">
-      <strong style="color: ${allOk ? 'var(--success)' : 'var(--warn)'};">${allOk ? '✓' : '⚠'} 목표 자가진단:</strong>
-      사업계획 시트 합계 — 판매량 <strong>${(td.planQty / 1e6).toFixed(1)}천톤</strong> (목표 ${(DPDS_TARGET_QTY_KG / 1e6).toFixed(0)}천톤) · 영업이익 <strong>${(td.planOp / 1e8).toFixed(2)}억</strong> (목표 ${(DPDS_TARGET_OP_WON / 1e8).toFixed(0)}억)
-      ${allOk ? '— 정확히 인식되었습니다.' : ' — 차이가 있다면 "업로드 & 검증" 탭에서 원인을 확인해 주세요.'}
-    </div>`;
-  }
-
   // 손익항목별 종합 비교표
-  let html = diagBanner;
+  let html = '';
   html += `<div style="margin-bottom: 14px; font-size: 11px; color: var(--ink-3); line-height: 1.6;">
     📌 <strong>전망 = 실적(1~${cm}월) + 실행계획(${cm+1}~12월)</strong>. 격차 = 전망 − 사업계획 (양수면 초과, 음수면 미달). 달성률 ≥95% 초록 · ≥85% 노랑 · &lt;85% 빨강. 영업이익은 시스템 산출(매출 − 7개 비용)을 사용합니다.
   </div>
@@ -13880,15 +14266,8 @@ function renderDataSummary() {
     <strong style="color: var(--ink);">📊 데이터 정책</strong> &nbsp;
     손익 비교·달성률은 <strong>전체(연동+비연동) 합산</strong> · 판가 인상/인하 적용은 <strong>비연동 SKU만</strong>
   </div>`;
-  // 목표 자가진단 배너 (간결화)
-  const td = DATA.validation?.targetDiagnosis;
-  const targetBanner = td ? (() => {
-    const allOk = td.qtyMatch && td.opMatch;
-    return `<div style="margin-bottom: 12px; padding: 9px 13px; background: ${allOk ? 'var(--success-bg, #ecfdf5)' : 'var(--danger-bg, #fef2f2)'}; border-left: 3px solid ${allOk ? 'var(--success)' : 'var(--danger)'}; border-radius: 4px; font-size: 11.5px; color: var(--ink-2); line-height: 1.65;">
-      <strong style="color: ${allOk ? 'var(--success)' : 'var(--danger)'};">${allOk ? '✓ 목표 자가진단 통과' : '✗ 목표 자가진단 불일치'}</strong>
-      &nbsp;사업계획 시트 인식값: 판매량 <strong>${(td.planQty / 1e6).toFixed(1)}천톤</strong>(목표 680, Δ${(td.qtyDiff / 1e6).toFixed(1)}) · 영업이익 <strong>${(td.planOp / 1e8).toFixed(1)}억</strong>(목표 113, Δ${(td.opDiff / 1e8).toFixed(1)})
-    </div>`;
-  })() : '';
+  // 고정 목표 기준값은 업로드 원자료로 오인되지 않도록 데이터 요약 카드에 노출하지 않음.
+  const targetBanner = '';
 
   // v38: KPI 카드 그리드 — 반응형 (넓을 땐 4열, 좁을 땐 2열/1열 자동 배치)
   const kpiCard = (label, key, unit, divider, decimals, isOp) => {
@@ -13982,32 +14361,67 @@ function renderHomeFromData() {
   const ach = getAchievement();
   const req = getRequiredPriceIncrease();
   if (!ach || !req) return;
-  const oku = n => Math.round(n / 1e8).toLocaleString('ko-KR');
   const set = (id, html) => { const el = document.getElementById(id); if (el) el.innerHTML = html; };
-  set('homeKpiAvg', `${_fmtSignedWon(req.requiredPerKg, 0, '')}<span class="unit">원/kg</span>`);
-  set('homeKpiOp', `${oku(ach.plan.op)}<span class="unit">억원</span>`);
-  set('homeRecoDesc', `필요 조정폭 ${_fmtSignedWon(req.requiredPerKg)}/kg · OP 격차 ${_fmtSignedOku(req.opGapOku)} · 영업이익 달성률 ${ach.op}% · 전망 판매량 ${(req.volumeMt/1000).toFixed(1)} 만톤`);
+  const previews = (typeof _getScenarioPreviewSet === 'function') ? _getScenarioPreviewSet() : null;
+  const balanced = previews ? previews.find(p => p.key === 'balanced')?.result : null;
+  const amt = balanced ? balanced.amt : req.requiredPerKg;
+  const opOku = balanced ? balanced.opAnnual : (ach.outlook.op || 0) / 1e8;
+  const opAch = balanced ? balanced.achievement : ach.op;
+  const rounds = balanced ? balanced.rounds : null;
+  const efficiency = balanced ? balanced.efficiency : null;
+  const requiredItems = (typeof CHECKS !== 'undefined') ? CHECKS.filter(c => c.required) : [];
+  const requiredPassed = requiredItems.filter(c => STATE.checks?.[c.id]).length;
+  const allRequiredPassed = requiredItems.length > 0 && requiredPassed === requiredItems.length;
+
+  set('homeRecoTitle', '2안 (균형 회복) · 업로드 데이터 기준 권고');
+  set('homeKpiLaw', allRequiredPassed ? 'PASS' : '점검중');
+  set('homeKpiLawDelta', requiredItems.length ? `필수 ${requiredPassed}/${requiredItems.length}` : '자가점검 기준');
+  set('homeKpiAvg', `${_fmtSignedWon(amt, 0, '')}<span class="unit">원/kg</span>`);
+  set('homeKpiAvgDelta', `OP 격차 ${_fmtSignedOku(req.opGapOku)}`);
+  set('homeKpiOp', `${Math.round(opOku).toLocaleString('ko-KR')}<span class="unit">억원</span>`);
+  set('homeKpiOpDelta', `달성률 ${opAch}%`);
+  set('homeKpiRounds', rounds ? `${rounds}<span class="unit">회</span>` : '산출전');
+  set('homeKpiRoundsDelta', Number.isFinite(efficiency) ? `회당 효율 ${efficiency.toFixed(1)}원` : '자동 산출');
+  set('homeRecoDesc', `균형안 기준 평균 ${_fmtSignedWon(amt)}/kg · 예상 OP ${Math.round(opOku).toLocaleString('ko-KR')}억 · 달성률 ${opAch}% · 전망 판매량 ${(req.volumeMt/1000).toFixed(1)} 만톤`);
 }
 
 /* === 상태 도넛 차트 (실데이터 우선) === */
 function renderStatusCharts() {
-  let vals = [79, 81, 68, 22];
-  let labels = ['판매량', '순매출액', '매출이익', '영업이익'];
-  let detail = ['90.6 / 114.4 만톤', '1,840 / 2,272 억원', '228 / 335 억원', '25 / 113 억원'];
-  if (DATA.loaded && DATA.agg) {
-    const ach = getAchievement();
-    if (ach) {
-      vals = [ach.qty, ach.rev, ach.gp, ach.op];
-      const oku = n => Math.round(n / 1e8).toLocaleString('ko-KR');
-      const mt  = n => (n / 1e6).toFixed(1);
-      detail = [
-        `${mt(ach.outlook.qty)} / ${mt(ach.plan.qty)} 천톤`,
-        `${oku(ach.outlook.rev)} / ${oku(ach.plan.rev)} 억원`,
-        `${oku(ach.outlook.gp)} / ${oku(ach.plan.gp)} 억원`,
-        `${oku(ach.outlook.op)} / ${oku(ach.plan.op)} 억원`
-      ];
-    }
+  const detailNodes = document.querySelectorAll('#view-status .grid-4 > div > div:last-child > div:last-child');
+  const clearToPending = () => {
+    ['donut1','donut2','donut3','donut4'].forEach(id => {
+      destroyChart(id);
+      const el = document.getElementById(id);
+      if (el && el.getContext) {
+        const ctx = el.getContext('2d');
+        if (ctx) ctx.clearRect(0, 0, el.width || 0, el.height || 0);
+      }
+      const vEl = document.getElementById(id + 'V');
+      if (vEl) {
+        vEl.textContent = '산출전';
+        vEl.style.color = 'var(--ink-3)';
+      }
+    });
+    detailNodes.forEach(n => { if (n) n.textContent = '업로드 후 표시'; });
+  };
+  if (!DATA.loaded || !DATA.agg) {
+    clearToPending();
+    return;
   }
+  const ach = getAchievement();
+  if (!ach) {
+    clearToPending();
+    return;
+  }
+  const vals = [ach.qty, ach.rev, ach.gp, ach.op];
+  const oku = n => Math.round(n / 1e8).toLocaleString('ko-KR');
+  const mt  = n => (n / 1e6).toFixed(1);
+  const detail = [
+    `${mt(ach.outlook.qty)} / ${mt(ach.plan.qty)} 천톤`,
+    `${oku(ach.outlook.rev)} / ${oku(ach.plan.rev)} 억원`,
+    `${oku(ach.outlook.gp)} / ${oku(ach.plan.gp)} 억원`,
+    `${oku(ach.outlook.op)} / ${oku(ach.plan.op)} 억원`
+  ];
   // 도넛 그리기
   ['donut1','donut2','donut3','donut4'].forEach((id, i) => {
     const el = document.getElementById(id);
@@ -14033,7 +14447,6 @@ function renderStatusCharts() {
     }
   });
   // 디테일 텍스트 갱신
-  const detailNodes = document.querySelectorAll('#view-status .grid-4 > div > div:last-child > div:last-child');
   detailNodes.forEach((n, i) => { if (detail[i] && n) n.textContent = detail[i]; });
 }
 
@@ -14116,20 +14529,13 @@ function loadSample() {
 }
 
 function _buildSampleWorkbook() {
-  // v35: 사용자 회사 실제 사업계획 규모로 재조정
-  //   - 사업계획 판매량 합계 = 680천톤 (68만톤), planAdj=1.10 적용 후 = 682천톤
-  //   - 사업계획 영업이익 합계 = 113억원
-  //   - 비용 비율은 영업이익률(7%)과 정합 → rawMat 0.64 + mfgVar 0.08 + mfgFix 0.07
-  //     + salesVar 0.05 + salesFix 0.04 + ga 0.05 = 0.93, OP = 1 - 0.93 = 0.07 = opMargin
-  //   - 카테고리 비중: 양돈 45.2% · 양계 29.0% · 축우 19.4% · 양어 6.5% (대한사료 실제 비중 근사)
+  // 업로드 포맷 확인용 샘플 데이터입니다. 실제 분석 기준값으로 사용하지 않습니다.
   const profiles = {
     '양계': { qty: 180e6, rev: 405e8, opMargin: 0.07, mid: '산란계', skus: ['산란셀가드-I','산란위너벌크-Y','산란퀸벌크-H'] },
     '양돈': { qty: 280e6, rev: 644e8, opMargin: 0.07, mid: '양돈',   skus: ['키워드림골드-I','베리굿팜육성돈-H','PK2호벌크-Y','EX-120육성돈-Y'] },
     '축우': { qty: 120e6, rev: 312e8, opMargin: 0.07, mid: '젖소',   skus: ['젖소육성-H','베스트초이-I'] },
     '양어': { qty: 40e6,  rev: 110e8, opMargin: 0.07, mid: '담수',   skus: ['잉어성장-Y'] }
   };
-  // 원본 합계: qty=620e6 kg, rev=1471e8, op=1471e8×0.07=102.97e8
-  // plan(×1.10) 합계: qty=682e6 kg ≈ 68만톤 ✓, op=113.27e8 ≈ 113억 ✓
   const headers = ['', '대분류코드','대분류','중분류코드','중분류','소분류코드','소분류','품목코드','품목','공장','제/상품','연동제','형태','손익구분', ...MONTH_KEYS, '26년 합계'];
   const plants = ['인천','전주','창원','서산'];
 
@@ -14278,7 +14684,7 @@ function handleUpload(event) {
             law: '§40 OK',
             actionClass: 'pos'
           });
-          if (STATE.decisions.length > 2000) STATE.decisions = STATE.decisions.slice(0, 2000);
+          dpdsTrimDecisions();
         }
       } catch(e) { console.warn('감사로그 기록 실패:', e); }
 
