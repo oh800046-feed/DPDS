@@ -15207,8 +15207,12 @@ async function saveDpdsResultToSupabase(file) {
     throw new Error('Supabase client가 초기화되지 않았습니다.');
   }
 
-  const safeFileName = file.name.replace(/[^\w.\-가-힣]/g, '_');
-  const filePath = `uploads/${Date.now()}_${safeFileName}`;
+  // Preserve the original filename in metadata; use an ASCII-only Storage key.
+  const extensionMatch = String(file.name).match(/\.([a-zA-Z0-9]{1,10})$/);
+  const extension = extensionMatch ? '.' + extensionMatch[1].toLowerCase() : '';
+  const randomBytes = crypto.getRandomValues(new Uint8Array(16));
+  const uploadId = Array.from(randomBytes, b => b.toString(16).padStart(2, '0')).join('');
+  const filePath = `uploads/${Date.now()}_${uploadId}${extension}`;
 
   const { error: uploadError } = await window.supabaseClient.storage
     .from('dpds-files')
