@@ -6,9 +6,9 @@ async function getText(url, timeout = 12000) {
   return response.text();
 }
 async function getJson(url, timeout) { return JSON.parse(await getText(url, timeout)); }
-function send(res, body, status = 200) {
+function send(res, body, status = 200, cache = 's-maxage=1800, stale-while-revalidate=3600') {
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
-  res.setHeader('Cache-Control', 's-maxage=1800, stale-while-revalidate=3600');
+  res.setHeader('Cache-Control', cache);
   res.status(status).json(body);
 }
 function fail(res, error) { send(res, { success: false, message: error.message }, 502); }

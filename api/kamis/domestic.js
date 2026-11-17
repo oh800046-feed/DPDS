@@ -43,13 +43,20 @@ function periodUrl(livestock, now = new Date()) {
   for (const [k, v] of Object.entries({ searchType: 'month', searchStartDate: ym(start), searchEndDate: ym(month), startYYMM: ym(start), endYYMM: ym(month), searchCondition: pig ? 'n1101' : '0000', searchCondition1: pig ? '4' : '1', searchCondition2: pig ? 'T' : '3', ...(pig ? { searchCondition3: '2' } : {}), searchYn: 'Y' })) url.searchParams.set(k, v);
   return url.toString();
 }
+async function collect(url, parse) {
+  let error;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try { return parse(await getText(url, 9000)); }
+    catch (e) { error = e; }
+  }
+  throw error;
+}
 module.exports = async function handler(req, res) {
   try {
     const [beefResult, porkResult, eggResult] = await Promise.allSettled([
-      getText(periodUrl('beef')).then(html => monthly(beefMonthly(html))),
-      getText(periodUrl('pork')).then(html => monthly(porkMonthly(html))),
-      getText('https://www.ekapepia.com/v3/price/livestock/egg/producer/nation.do')
-        .then(html => monthly(eggHistory(html), true))
+      collect(periodUrl('beef'), html => monthly(beefMonthly(html))),
+      collect(periodUrl('pork'), html => monthly(porkMonthly(html))),
+      collect('https://www.ekapepia.com/v3/price/livestock/egg/producer/nation.do', html => monthly(eggHistory(html), true))
     ]);
     const value = result => result.status === 'fulfilled' ? result.value : [];
     const beef = value(beefResult), pork = value(porkResult), egg = value(eggResult);
@@ -58,10 +65,11 @@ module.exports = async function handler(req, res) {
       .map(([name, result]) => [name, result.reason.message]));
     if (Object.keys(errors).length) console.warn('국내 가격 일부 수집 실패', errors);
     if (!beef.length && !pork.length && !egg.length) throw new Error('국내 축산물 원천 자료 연결 실패');
-    send(res, { success: true, beef, pork, egg, fish: [], source: '축산물품질평가원 한우 경락·돼지 탕박 전국(제주 제외) 경락·계란 XL 생산자가격', unavailable: [...(beef.length ? [] : ['한우']), ...(pork.length ? [] : ['돼지']), ...(egg.length ? [] : ['계란']), '광어'], errors, updated_at: new Date().toISOString() });
+    send(res, { success: true, beef, pork, egg, fish: [], source: '축산물품질평가원 한우 경락·돼지 탕박 전국(제주 제외) 경락·계란 XL 생산자가격', unavailable: [...(beef.length ? [] : ['한우']), ...(pork.length ? [] : ['돼지']), ...(egg.length ? [] : ['계란']), '광어'], errors, updated_at: new Date().toISOString() }, 200, Object.keys(errors).length ? 'no-store' : 's-maxage=1800, stale-while-revalidate=3600');
   } catch (e) { fail(res, e); }
 };
 module.exports.eggHistory = eggHistory;
 module.exports.beefMonthly = beefMonthly;
 module.exports.porkMonthly = porkMonthly;
 module.exports.periodUrl = periodUrl;
+module.exports.collect = collect;
