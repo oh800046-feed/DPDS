@@ -15,8 +15,7 @@ module.exports = async function handler(req, res) {
   try {
     const html = await getText('https://www.ekapepia.com/v3/price/livestock/egg/producer/nation.do');
     const history = eggHistory(html);
-    if (req.query?.debug === '1') return send(res, { count: history.length, first: history.slice(0, 2), last: history.slice(-2), htmlLength: html.length, chartCount: [...html.matchAll(/chartData\.push/g)].length });
-    const egg = monthly(history);
+    const egg = monthly(history, true);
     send(res, { success: true, beef: [], pork: [], egg, fish: [], source: '축산물품질평가원 계란 XL 생산자가격', unavailable: ['한우', '돼지', '광어'], updated_at: new Date().toISOString() });
   } catch (e) { fail(res, e); }
 };

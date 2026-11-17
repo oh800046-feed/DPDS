@@ -7944,7 +7944,12 @@ function _buildSeriesFromIndexArray(indexValues) {
   const actual = actualValues.concat(Array(6).fill(null));
 
   const diffs = [];
-  for (let i = 1; i < actualValues.length; i++) diffs.push(actualValues[i] - actualValues[i - 1]);
+  for (let i = 1; i < actualValues.length; i++) {
+    if (Number.isFinite(actualValues[i]) && Number.isFinite(actualValues[i - 1]))
+      diffs.push(actualValues[i] - actualValues[i - 1]);
+  }
+  const validCount = actualValues.filter(Number.isFinite).length;
+  if (validCount < 4) return { actual, forecast: Array(13).fill(null) };
   const avgDiff = diffs.length ? diffs.reduce((a, b) => a + b, 0) / diffs.length : 0;
   const cappedDiff = Math.max(Math.min(avgDiff, 1.8), -1.8);
 

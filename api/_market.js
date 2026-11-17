@@ -27,7 +27,7 @@ async function yahoo(symbol, range = '2y') {
   }
   throw error;
 }
-function monthly(rows) {
+function monthly(rows, allowGaps = false) {
   const groups = new Map();
   for (const row of rows) {
     const ym = row.date.slice(0, 7);
@@ -36,9 +36,21 @@ function monthly(rows) {
     group.total += row.raw; group.count++; groups.set(ym, group);
   }
   const values = [...groups].sort(([a], [b]) => a.localeCompare(b)).map(([ym, g]) => ({ ym: ym.replace('-', ''), raw: Math.round(g.total / g.count * 100) / 100 }));
-  if (values.length < 7) throw new Error('월별 자료 7개월 미만');
-  const recent = values.slice(-7);
-  const base = recent[0].raw;
-  return recent.map(v => ({ ...v, index: Math.round(v.raw / base * 1000) / 10 }));
+  if (values.length < (allowGaps ? 1 : 7)) throw new Error('월별 자료 부족');
+  if (!allowGaps) {
+    const recent = values.slice(-7);
+    const base = recent[0].raw;
+    return recent.map(v => ({ ...v, index: Math.round(v.raw / base * 1000) / 10 }));
+  }
+  const end = values.at(-1).ym;
+  const lastMonth = new Date(Date.UTC(Number(end.slice(0, 4)), Number(end.slice(4)) - 1, 1));
+  const byMonth = new Map(values.map(v => [v.ym, v]));
+  const recent = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(Date.UTC(lastMonth.getUTCFullYear(), lastMonth.getUTCMonth() + i - 6, 1));
+    const ym = `${d.getUTCFullYear()}${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+    return byMonth.get(ym) || { ym, raw: null };
+  });
+  const base = recent.find(v => v.raw !== null)?.raw;
+  return recent.map(v => ({ ...v, index: v.raw === null ? null : Math.round(v.raw / base * 1000) / 10 }));
 }
 module.exports = { getText, getJson, send, fail, yahoo, monthly };
