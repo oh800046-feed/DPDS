@@ -3330,8 +3330,8 @@ body[data-width="full"]     { --content-max: none; }
           <div class="chart-wrap"><canvas id="chartOverseas"></canvas></div>
           <div style="margin-top: 8px; padding: 8px 10px; background: var(--surface-2); border-radius: 5px; font-size: 10.5px; color: var(--ink-3); line-height: 1.6;">
             <strong style="color: var(--ink-2);">📂 출처:</strong>
-            CBOT(옥수수·대두박) · BDI(해상운임) · ECOS(환율)<br>
-            <strong style="color: var(--ink-2);">📅 업데이트:</strong> <span id="overseasUpdateAt">2026-05-06 09:30 KST</span><br>
+            Yahoo Finance 경유 CBOT·USD/KRW · BalticDryIndex.com 경유 BDI · CFTC<br>
+            <strong style="color: var(--ink-2);">📅 업데이트:</strong> <span id="overseasUpdateAt">갱신 전</span><br>
             <strong style="color: var(--ink-2);">🔗 USD/KRW 환율:</strong> <span id="ecosFxStatus">시장 API 연결 대기</span>
           </div>
         </div>
@@ -3340,16 +3340,16 @@ body[data-width="full"]     { --content-max: none; }
         <div class="card">
           <div class="h" style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px;">
             <div style="min-width: 0;">
-              <h3 style="font-size: 14px;">🇰🇷 국내 시장 — 축산·수산물 시세 12M <span class="help-i" data-tip="소(한우 도매), 돼지(돈육 도매), 계란(특란 30구), 양어(광어 산지) 시세. 좌측 6개월 실적(실선) + 우측 6개월 전망(점선). 사료 수요 예측 근거">?</span></h3>
+              <h3 style="font-size: 14px;">🇰🇷 국내 시장 — 축산·수산물 시세 12M <span class="help-i" data-tip="현재 계란 XL 생산자가격만 연동. 한우·돼지·광어는 자료 연동 전. 없는 월은 결측으로 표시합니다.">?</span></h3>
               <span class="sub" id="domesticSub">6M ACTUAL · 6M FORECAST</span>
             </div>
-            <button class="btn" style="font-size: 10.5px; padding: 4px 8px;" onclick="refreshDomesticMarket()" data-tip="KAMIS·축평원 최신 시세 갱신">↻ 업데이트</button>
+            <button class="btn" style="font-size: 10.5px; padding: 4px 8px;" onclick="refreshDomesticMarket()" data-tip="축평원 계란 가격 최신 자료 갱신">↻ 업데이트</button>
           </div>
           <div class="chart-wrap"><canvas id="chartDomestic"></canvas></div>
           <div style="margin-top: 8px; padding: 8px 10px; background: var(--surface-2); border-radius: 5px; font-size: 10.5px; color: var(--ink-3); line-height: 1.6;">
             <strong style="color: var(--ink-2);">📂 출처:</strong>
             축평원 계란 XL 생산자가격 · 한우·돈육·광어 자료는 연동 전<br>
-            <strong style="color: var(--ink-2);">📅 업데이트:</strong> <span id="domesticUpdateAt">2026-05-06 09:30 KST</span>
+            <strong style="color: var(--ink-2);">📅 업데이트:</strong> <span id="domesticUpdateAt">갱신 전</span>
           </div>
         </div>
       </div>
@@ -8064,10 +8064,9 @@ async function refreshOverseasMarket() {
     fetchCotGrains()
   ]);
 
-  const now = new Date();
-  const dateStr = now.toISOString().slice(0, 10) + ' ' + now.toTimeString().slice(0, 5) + ' KST';
+  const dateStr = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Seoul', dateStyle: 'short', timeStyle: 'short' }).format(new Date()) + ' KST';
   const el = document.getElementById('overseasUpdateAt');
-  if (el) el.textContent = dateStr;
+  if (el && [ecosResult, cbotResult, bdiResult, cotResult].some(r => r.status === 'fulfilled')) el.textContent = dateStr;
 
   if (ecosResult.status === 'fulfilled') {
     setEcosFxStatus('연동 완료 · Yahoo Finance 경유 USD/KRW 월평균', 'success');
@@ -8107,18 +8106,13 @@ async function refreshDomesticMarket() {
 
   try {
     await fetchKamisDomestic();
-    const now = new Date();
-    const dateStr = now.toISOString().slice(0, 10) + ' ' + now.toTimeString().slice(0, 5) + ' KST';
+    const dateStr = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Seoul', dateStyle: 'short', timeStyle: 'short' }).format(new Date()) + ' KST';
     const el = document.getElementById('domesticUpdateAt');
     if (el) el.textContent = dateStr;
     renderMarketCharts();
     showToast('✓ 국내 시장 갱신 완료 — 축평원 계란 XL 가격 반영', 'success');
   } catch (err) {
     console.warn('KAMIS 갱신 실패', err);
-    const now = new Date();
-    const dateStr = now.toISOString().slice(0, 10) + ' ' + now.toTimeString().slice(0, 5) + ' KST';
-    const el = document.getElementById('domesticUpdateAt');
-    if (el) el.textContent = dateStr;
     renderMarketCharts();
     showToast(`국내 가격 수집 실패 — ${err.message}`, 'warn');
   }
@@ -8274,7 +8268,7 @@ function restoreUpdateTimestamps() {
 
   if (overseasAt) {
     const el = document.getElementById('overseasUpdateAt');
-    if (el) el.textContent = overseasAt.slice(0, 16).replace('T', ' ') + ' KST';
+    if (el) el.textContent = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Seoul', dateStyle: 'short', timeStyle: 'short' }).format(new Date(overseasAt)) + ' KST';
   }
 
   // 국내 시장: KAMIS 저장 시각
@@ -8283,7 +8277,7 @@ function restoreUpdateTimestamps() {
     const saved = JSON.parse(kamisRaw);
     if (saved?.savedAt) {
       const el = document.getElementById('domesticUpdateAt');
-      if (el) el.textContent = saved.savedAt.slice(0, 16).replace('T', ' ') + ' KST';
+      if (el) el.textContent = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Seoul', dateStyle: 'short', timeStyle: 'short' }).format(new Date(saved.savedAt)) + ' KST';
     }
   } catch(e) {}
 }
