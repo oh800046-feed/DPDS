@@ -3340,15 +3340,15 @@ body[data-width="full"]     { --content-max: none; }
         <div class="card">
           <div class="h" style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px;">
             <div style="min-width: 0;">
-              <h3 style="font-size: 14px;">🇰🇷 국내 시장 — 축산·수산물 시세 12M <span class="help-i" data-tip="현재 계란 XL 생산자가격만 연동. 한우·돼지·광어는 자료 연동 전. 없는 월은 결측으로 표시합니다.">?</span></h3>
+              <h3 style="font-size: 14px;">🇰🇷 국내 시장 — 축산·수산물 시세 12M <span class="help-i" data-tip="한우·돼지는 축평원 월별 경락가격, 계란은 XL 생산자가격입니다. 광어는 KMI 당해년 실적이 제공되지 않아 결측으로 표시합니다.">?</span></h3>
               <span class="sub" id="domesticSub">6M ACTUAL · 6M FORECAST</span>
             </div>
-            <button class="btn" style="font-size: 10.5px; padding: 4px 8px;" onclick="refreshDomesticMarket()" data-tip="축평원 계란 가격 최신 자료 갱신">↻ 업데이트</button>
+            <button class="btn" style="font-size: 10.5px; padding: 4px 8px;" onclick="refreshDomesticMarket()" data-tip="축평원 한우·돼지·계란 가격 갱신">↻ 업데이트</button>
           </div>
           <div class="chart-wrap"><canvas id="chartDomestic"></canvas></div>
           <div style="margin-top: 8px; padding: 8px 10px; background: var(--surface-2); border-radius: 5px; font-size: 10.5px; color: var(--ink-3); line-height: 1.6;">
             <strong style="color: var(--ink-2);">📂 출처:</strong>
-            축평원 계란 XL 생산자가격 · 한우·돈육·광어 자료는 연동 전<br>
+            축평원 한우 경락·돼지 탕박 경락(제주 제외)·계란 XL 생산자가격 · 광어 당해년 실적 미제공<br>
             <strong style="color: var(--ink-2);">📅 업데이트:</strong> <span id="domesticUpdateAt">갱신 전</span>
           </div>
         </div>
@@ -8105,12 +8105,13 @@ async function refreshDomesticMarket() {
   showToast('국내 시장 데이터 갱신 중...', 'success');
 
   try {
-    await fetchKamisDomestic();
+    const result = await fetchKamisDomestic();
     const dateStr = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Seoul', dateStyle: 'short', timeStyle: 'short' }).format(new Date()) + ' KST';
     const el = document.getElementById('domesticUpdateAt');
     if (el) el.textContent = dateStr;
     renderMarketCharts();
-    showToast('✓ 국내 시장 갱신 완료 — 축평원 계란 XL 가격 반영', 'success');
+    const available = ['한우', '돼지', '계란'].filter(name => !result.unavailable.includes(name));
+    showToast(`✓ 국내 시장 갱신 완료 — ${available.join('·')} 가격 반영${result.unavailable.some(name => name !== '광어') ? ' (일부 자료 미제공)' : ''}`, 'success');
   } catch (err) {
     console.warn('KAMIS 갱신 실패', err);
     renderMarketCharts();
@@ -8164,12 +8165,11 @@ function getStoredKamisSeries() {
     const saved = JSON.parse(raw);
     if (!saved) return null;
     const keys = ['beef', 'pork', 'egg', 'fish'];
-    // 계란만 필수 검증
-    if (!Array.isArray(saved.egg) || saved.egg.length < 7) return null;
+    if (!keys.some(key => Array.isArray(saved[key]) && saved[key].length >= 7)) return null;
     return {
       beef: saved.beef?.length ? _buildHoltSeries(saved.beef.map(p => p.index)) : null,
       pork: saved.pork?.length ? _buildHoltSeries(saved.pork.map(p => p.index)) : null,
-      egg:  _buildHoltSeries(saved.egg.map(p => p.index)),
+      egg:  saved.egg?.length ? _buildHoltSeries(saved.egg.map(p => p.index)) : null,
       fish: saved.fish?.length ? _buildHoltSeries(saved.fish.map(p => p.index)) : null,
     };
   } catch (e) {
@@ -8187,9 +8187,8 @@ async function fetchKamisDomestic() {
     throw new Error(payload.message || `FLASK_KAMIS_HTTP_${res.status}`);
 
   const { beef, pork, egg, fish } = payload;
-  // 계란 필수, 광어는 선택 (한우·돼지는 EKAPE 연동 전까지 빈 배열 허용)
-  if (!egg?.length)
-    throw new Error('KAMIS_EMPTY_SERIES');
+  if (![beef, pork, egg, fish].some(points => Array.isArray(points) && points.length >= 7))
+    throw new Error('국내 가격 자료 없음');
 
   const savedAt = payload.updated_at || new Date().toISOString();
   localStorage.setItem(KAMIS_STORAGE_KEY, JSON.stringify({ savedAt, beef, pork, egg, fish }));
@@ -8200,6 +8199,7 @@ async function fetchKamisDomestic() {
     pork: pork?.length ? _buildHoltSeries(pork.map(p => p.index)) : null,
     egg:  _buildHoltSeries(egg.map(p => p.index)),
     fish: fish?.length ? _buildHoltSeries(fish.map(p => p.index)) : null,
+    unavailable: Array.isArray(payload.unavailable) ? payload.unavailable : [],
   };
 }
 
