@@ -53,8 +53,12 @@ module.exports = async function handler(req, res) {
     ]);
     const value = result => result.status === 'fulfilled' ? result.value : [];
     const beef = value(beefResult), pork = value(porkResult), egg = value(eggResult);
+    const errors = Object.fromEntries([['한우', beefResult], ['돼지', porkResult], ['계란', eggResult]]
+      .filter(([, result]) => result.status === 'rejected')
+      .map(([name, result]) => [name, result.reason.message]));
+    if (Object.keys(errors).length) console.warn('국내 가격 일부 수집 실패', errors);
     if (!beef.length && !pork.length && !egg.length) throw new Error('국내 축산물 원천 자료 연결 실패');
-    send(res, { success: true, beef, pork, egg, fish: [], source: '축산물품질평가원 한우 경락·돼지 탕박 전국(제주 제외) 경락·계란 XL 생산자가격', unavailable: [...(beef.length ? [] : ['한우']), ...(pork.length ? [] : ['돼지']), ...(egg.length ? [] : ['계란']), '광어'], updated_at: new Date().toISOString() });
+    send(res, { success: true, beef, pork, egg, fish: [], source: '축산물품질평가원 한우 경락·돼지 탕박 전국(제주 제외) 경락·계란 XL 생산자가격', unavailable: [...(beef.length ? [] : ['한우']), ...(pork.length ? [] : ['돼지']), ...(egg.length ? [] : ['계란']), '광어'], errors, updated_at: new Date().toISOString() });
   } catch (e) { fail(res, e); }
 };
 module.exports.eggHistory = eggHistory;
