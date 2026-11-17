@@ -3332,7 +3332,7 @@ body[data-width="full"]     { --content-max: none; }
             <strong style="color: var(--ink-2);">📂 출처:</strong>
             CBOT(옥수수·대두박) · BDI(해상운임) · ECOS(환율)<br>
             <strong style="color: var(--ink-2);">📅 업데이트:</strong> <span id="overseasUpdateAt">2026-05-06 09:30 KST</span><br>
-            <strong style="color: var(--ink-2);">🔗 ECOS 환율:</strong> <span id="ecosFxStatus">Flask API 연결 대기</span>
+            <strong style="color: var(--ink-2);">🔗 USD/KRW 환율:</strong> <span id="ecosFxStatus">시장 API 연결 대기</span>
           </div>
         </div>
 
@@ -3348,7 +3348,7 @@ body[data-width="full"]     { --content-max: none; }
           <div class="chart-wrap"><canvas id="chartDomestic"></canvas></div>
           <div style="margin-top: 8px; padding: 8px 10px; background: var(--surface-2); border-radius: 5px; font-size: 10.5px; color: var(--ink-3); line-height: 1.6;">
             <strong style="color: var(--ink-2);">📂 출처:</strong>
-            EKAPE(한우·돈육) · KAMIS(계란) · 수산물유통정보(광어 산지)<br>
+            축평원 계란 XL 생산자가격 · 한우·돈육·광어 자료는 연동 전<br>
             <strong style="color: var(--ink-2);">📅 업데이트:</strong> <span id="domesticUpdateAt">2026-05-06 09:30 KST</span>
           </div>
         </div>
@@ -8049,7 +8049,7 @@ async function fetchCbotIndex12M() {
 /* ---------- 갱신 함수 ---------- */
 async function refreshOverseasMarket() {
   showToast('해외 시장 데이터 갱신 중...', 'success');
-  setEcosFxStatus('ECOS 환율 수집 중...', 'neutral');
+  setEcosFxStatus('USD/KRW 환율 수집 중...', 'neutral');
 
   // ECOS + CBOT + BDI + COT 병렬 호출
   const [ecosResult, cbotResult, bdiResult, cotResult] = await Promise.allSettled([
@@ -8065,11 +8065,11 @@ async function refreshOverseasMarket() {
   if (el) el.textContent = dateStr;
 
   if (ecosResult.status === 'fulfilled') {
-    setEcosFxStatus('연동 완료 · 실제 ECOS 월평균 Index 반영', 'success');
+    setEcosFxStatus('연동 완료 · Yahoo Finance 경유 USD/KRW 월평균', 'success');
   } else {
     console.warn('ECOS 환율 갱신 실패', ecosResult.reason);
     setEcosFxStatus(`연동 실패 · ${ecosResult.reason.message}`, 'warn');
-    showToast('ECOS 환율 수집 실패 — Flask 또는 ECOS 응답을 확인하세요.', 'warn');
+    showToast(`USD/KRW 환율 수집 실패 — ${ecosResult.reason.message}`, 'warn');
   }
 
   if (cbotResult.status === 'rejected') {
@@ -8087,9 +8087,9 @@ async function refreshOverseasMarket() {
     showToast(`COT 수집 실패 — ${cotResult.reason.message}`, 'warn');
   }
 
-  const okCount = [cbotResult, bdiResult, cotResult].filter(r => r.status === 'fulfilled').length;
-  if (okCount === 3) {
-    showToast('✓ 해외 시장 갱신 완료 — ECOS + CBOT + BDI + COT 반영', 'success');
+  const okCount = [ecosResult, cbotResult, bdiResult, cotResult].filter(r => r.status === 'fulfilled').length;
+  if (okCount === 4) {
+    showToast('✓ 해외 시장 갱신 완료 — USD/KRW + CBOT + BDI + COT 반영', 'success');
   } else if (okCount > 0) {
     showToast('✓ 해외 시장 갱신 완료 (일부 성공)', 'success');
   }
@@ -8107,7 +8107,7 @@ async function refreshDomesticMarket() {
     const el = document.getElementById('domesticUpdateAt');
     if (el) el.textContent = dateStr;
     renderMarketCharts();
-    showToast('✓ 국내 시장 갱신 완료 — KAMIS(계란) + 수산물유통종합정보시스템(광어) 반영', 'success');
+    showToast('✓ 국내 시장 갱신 완료 — 축평원 계란 XL 가격 반영', 'success');
   } catch (err) {
     console.warn('KAMIS 갱신 실패', err);
     const now = new Date();
@@ -8115,7 +8115,7 @@ async function refreshDomesticMarket() {
     const el = document.getElementById('domesticUpdateAt');
     if (el) el.textContent = dateStr;
     renderMarketCharts();
-    showToast(`KAMIS 수집 실패 — ${err.message}`, 'warn');
+    showToast(`국내 가격 수집 실패 — ${err.message}`, 'warn');
   }
 }
 
@@ -8372,7 +8372,7 @@ function renderMarketCharts() {
   if (el) {
     destroyChart('chartOverseas');
     if (storedFx || storedCbot) setEcosFxStatus(
-      [storedCbot ? 'CBOT 실데이터' : '', storedFx ? 'ECOS 환율' : ''].filter(Boolean).join(' + ') + ' 반영 중',
+      [storedCbot ? 'CBOT 실데이터' : '', storedFx ? 'USD/KRW 환율' : ''].filter(Boolean).join(' + ') + ' 반영 중',
       'success'
     );
 
@@ -8387,7 +8387,7 @@ function renderMarketCharts() {
           { label: '대두박 (CBOT) - 전망',  data: soybean.forecast, borderColor: '#1e3a5f', borderDash: [5, 4], borderWidth: 2, tension: 0.3, pointRadius: 3, pointBackgroundColor: '#1e3a5f', pointBorderColor: '#1e3a5f' },
           { label: '해상운임 (BDI) - 실적', data: bdi.actual, borderColor: '#0891b2', borderWidth: 2.5, tension: 0.3, pointRadius: 3, pointBackgroundColor: '#fff', pointBorderColor: '#0891b2' },
           { label: '해상운임 (BDI) - 전망', data: bdi.forecast, borderColor: '#0891b2', borderDash: [5, 4], borderWidth: 2, tension: 0.3, pointRadius: 3, pointBackgroundColor: '#0891b2', pointBorderColor: '#0891b2' },
-          { label: '환율 (ECOS ₩/$) - 실적',    data: fx.actual,  borderColor: '#b91c1c', borderWidth: 2.5, tension: 0.3, pointRadius: 3, pointBackgroundColor: '#fff', pointBorderColor: '#b91c1c' },
+          { label: '환율 (Yahoo ₩/$) - 실적',    data: fx.actual,  borderColor: '#b91c1c', borderWidth: 2.5, tension: 0.3, pointRadius: 3, pointBackgroundColor: '#fff', pointBorderColor: '#b91c1c' },
           { label: '환율 (ECOS ₩/$) - 전망',    data: fx.forecast, borderColor: '#b91c1c', borderDash: [5, 4], borderWidth: 2, tension: 0.3, pointRadius: 3, pointBackgroundColor: '#b91c1c', pointBorderColor: '#b91c1c' }
         ]
       },
@@ -8633,11 +8633,7 @@ function renderMarketCharts() {
       cotShort  = storedCot.corn.map(d => -d.short);
       cotNet    = storedCot.corn.map(d => d.net_long);
     } else {
-      // 목업
-      cotLabels = ['8주전','7주전','6주전','5주전','4주전','3주전','2주전','전주','이번주'];
-      cotLong   = [228000, 235000, 243000, 251000, 258000, 265000, 271000, 273120, 285420];
-      cotShort  = [-145000, -141000, -137000, -132000, -129000, -126000, -123500, -122840, -118640];
-      cotNet    = [83000, 94000, 106000, 119000, 129000, 139000, 147500, 150280, 166780];
+      cotLabels = []; cotLong = []; cotShort = []; cotNet = [];
     }
 
     // 수치 카드 업데이트
@@ -8661,8 +8657,7 @@ function renderMarketCharts() {
       if (scEl) scEl.textContent = `전주 ${fmt(-shortChg)} ${shortChg <= 0 ? '↑' : '↓'}`;
       if (nvEl) nvEl.textContent = `${fmt(last.net_long)} 계약`;
       if (smEl) {
-        const trend = last.net_long > 0 ? '옥수수 가격 상승' : '옥수수 가격 하락';
-        smEl.innerHTML = `<strong>종합 전망: ${trend}</strong> · CFTC 실데이터 (${last.date})`;
+        smEl.textContent = `CFTC Managed Money 순포지션 · 공표 기준일 ${last.date}`;
       }
     }
 
