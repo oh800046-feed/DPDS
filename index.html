@@ -1,6 +1,9 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
+<!-- DPDS v48 · 판가 Spread 차질 표 · 의사결정 보드 고정 패널 배율 보정 · 실행계획 Platform 통합 파일(BD·비연동 Spread·판가조정 시트) 업로드 지원 -->
+<!-- DPDS v47 — 판가 시나리오 4안(수기 목표 달성률 % 입력) 추가: 1·2·3안과 같은 역산 산식, 카드·차트·MODE 3·프리셋 반영. 실행계획에 원가 행이 없으면 잔여월 원가 = (매출 − 영업이익) × 사업계획 원가 구성비로 보정해 매출총이익·구성요소 OP 과대 계상 해소(업로드 영업이익은 유지) -->
+<!-- DPDS v46 — MODE 3 수기(MANUAL)·자동(AUTO) 회차 금액이 축종별 예상 OP(인상 후)에 즉시 반영, 조정폭 칸 = 실제 적용 회차 합계, 결정 보드 KPI·결재 기록 예상 OP를 축종별 합계로 통일. 물량 조정은 잔여월에만 배부하고 공헌이익 증감을 전망·예상 OP와 비연동 물량에 반영. 실행계획에 판매량이 없으면 사업계획 물량 × (실행 매출 ÷ 계획 매출)로 잔여월 물량 추정 -->
 <!-- DPDS v44 — 시나리오 조정폭을 축종별 차등 역산으로 변경: 각 축종이 (자기 목표 × 시나리오%)에 도달하는 조정폭을 개별 산출(상한 클램프). 양계·축우처럼 적자 깊은 축종의 목표 Gap 해소 -->
 <!-- DPDS v43 — 두 표를 하나로 통합: 인상안 표 제거 + 메인 표(목표·전망·예상 OP·달성율·조정폭)로 단순화. 시나리오 선택(1안80/2안90/3안100%) 라벨 표시. Gap은 축종별 세부 조정에서 직접 해결 -->
 <!-- DPDS v42 — 인상안 표 레이아웃 수정: '현재 달성율' 컬럼 삭제(7→6칸) + table-layout:fixed·colgroup 너비배분으로 가로 넘침/깨짐 해결 -->
@@ -1575,6 +1578,7 @@ table.tbl tr:hover td { background: var(--surface-2); }
   grid-template-columns: repeat(3, 1fr);
   gap: 16px;
 }
+.scen-grid-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .scen-card {
   background: var(--surface);
   border: 1px solid var(--line);
@@ -2038,7 +2042,7 @@ body.dark .sg-row.sg-l3 { background: rgba(255,255,255,0.02) !important; }
   display: grid;
   grid-template-columns: minmax(470px, .94fr) minmax(360px, 1.06fr);
   gap: 12px;
-  align-items: start;
+  align-items: stretch;   /* v48: 좌우 패널 세로 길이를 맞춤 (각자 스크롤하지 않음) */
   margin-top: 12px;
 }
 .decision-control-pane,
@@ -2047,14 +2051,11 @@ body.dark .sg-row.sg-l3 { background: rgba(255,255,255,0.02) !important; }
 .decision-chart-pane > .card { margin-top: 0 !important; }
 .decision-control-pane .card { padding: 13px 15px !important; }
 .decision-control-pane .card > .h { padding-bottom: 8px; margin-bottom: 8px; }
-.decision-chart-pane {
-  position: sticky;
-  top: 62px;
-  z-index: 5;
-  max-height: calc(100vh - 78px);
-  overflow-y: auto;
-  padding-right: 4px;
-}
+.decision-control-pane,
+.decision-chart-pane { display: flex; flex-direction: column; }
+.decision-control-pane > .card:last-child,
+.decision-chart-pane > .card:last-child { flex: 1 1 auto; }
+#priceSpreadDecision .tbl { min-width: 0 !important; font-size: 10.5px !important; }
 .decision-chart-pane::-webkit-scrollbar { width: 6px; }
 .decision-chart-pane::-webkit-scrollbar-thumb { background: var(--line-2); border-radius: 4px; }
 .decision-chart-pane .card { padding: 12px 14px !important; }
@@ -2121,7 +2122,7 @@ body.dark .sg-row.sg-l3 { background: rgba(255,255,255,0.02) !important; }
 }
 @media (max-width: 900px) {
   .decision-live-grid { grid-template-columns: 1fr; }
-  .decision-chart-pane { order: -1; position: sticky; top: 54px; max-height: calc(100vh - 66px); }
+  .decision-chart-pane { order: -1; }
   .decision-chart-pane .grid-2 { grid-template-columns: 1fr; }
   .decision-chart-pane .chart-wrap.final-op-primary { height: 218px !important; }
   .decision-chart-pane .chart-wrap { height: 132px !important; }
@@ -3238,6 +3239,14 @@ body[data-width="full"]     { --content-max: none; }
         </table>
       </div>
 
+      <div class="card" style="margin-top: 12px;">
+        <div class="h">
+          <h3>📐 판가 Spread — 사업계획 대비 차질 <span class="help-i" data-tip="Spread = 판가(순매출액÷판매량) − 원재료비(원재료비÷판매량), 원/kg. 차질 = 전망 Spread − 사업계획 Spread. 차질 금액 = 차질 × 전망 물량. 인상 후 = 현재 선택한 시나리오·MODE 3 회차의 판가 인상분(비연동 물량 × 회수율)을 판가에 더한 값.">?</span></h3>
+          <span class="sub">PRICE − RAW MATERIAL · 원/kg</span>
+        </div>
+        <div id="priceSpreadStatus"><div style="font-size: 12px; color: var(--ink-3);">데이터를 업로드하면 축종별 판가 Spread가 표시됩니다.</div></div>
+      </div>
+
       </div><!-- /status-tab-spread -->
 
     </section>
@@ -3549,7 +3558,7 @@ body[data-width="full"]     { --content-max: none; }
         <strong style="color: var(--accent);">📊 시나리오 산출 기준</strong> — <span id="scenarioBasisText">현황 진단에서 실적·전망 데이터를 업로드하면, 업로드된 목표 OP·전망 OP를 기준으로 각 안의 권고 조정폭을 자동 역산합니다.</span>
       </div>
 
-      <div class="scen-grid">
+      <div class="scen-grid scen-grid-4">
         <div class="scen-card" onclick="selectScenario(1)">
           <div class="scen-tag">CONSERVATIVE</div>
           <h3>1안 · 전년 수준 (목표 80%)</h3>
@@ -3591,6 +3600,24 @@ body[data-width="full"]     { --content-max: none; }
             <div class="item"><div class="l">거래처 이탈</div><div class="v" id="scen3Churn" style="color:var(--danger);">산출전</div></div>
           </div>
           <div class="scen-foot">사업계획 목표 100% 달성 · 거래처 충격 큼 · 사전 협의 필수</div>
+        </div>
+
+        <div class="scen-card" onclick="selectScenario(4)">
+          <div class="scen-tag" style="color:#7c3aed;">CUSTOM</div>
+          <h3 id="scen4Title">4안 · 수기 목표 (목표 95%)</h3>
+          <label onclick="event.stopPropagation()" style="display:flex; align-items:center; gap:6px; font-size:12px; color:var(--ink-2); margin:2px 0 6px;">
+            목표 달성률
+            <input type="number" id="customAchPct" min="1" max="200" step="1" value="95" onchange="setCustomAchPct(this.value)" style="width:72px; padding:3px 6px; border:1px solid var(--line); border-radius:4px; text-align:right; font-family:var(--font-mono);"> %
+          </label>
+          <div class="scen-metrics">
+            <div class="item"><div class="l">평균 조정폭</div><div class="v" id="scen4Amt">산출전</div></div>
+            <div class="item"><div class="l">분할 회차</div><div class="v" id="scen4Rounds">산출전</div></div>
+            <div class="item"><div class="l">예상 OP</div><div class="v" id="scen4Op">산출전</div></div>
+            <div class="item"><div class="l">달성률</div><div class="v" id="scen4Ach">산출전</div></div>
+            <div class="item"><div class="l">회당 효율</div><div class="v" id="scen4Eff">산출전</div></div>
+            <div class="item"><div class="l">거래처 이탈</div><div class="v" id="scen4Churn">산출전</div></div>
+          </div>
+          <div class="scen-foot">위원회가 정한 목표 달성률(%)로 조정폭을 역산 · 1·2·3안과 같은 산식</div>
         </div>
       </div>
 
@@ -3727,11 +3754,11 @@ body[data-width="full"]     { --content-max: none; }
         <!-- 탭 3: 축종별 물량 조정 -->
         <div id="advTab-qty" class="adv-tab-panel" style="display: none;">
           <div style="font-size: 12.5px; color: var(--ink-2); line-height: 1.7; padding: 12px 14px; background: var(--surface-2); border-radius: 6px; margin-bottom: 10px;">
-            <strong>축종별 물량 조정</strong>은 업로드된 <strong>실행계획 물량을 베이스</strong>로 사용자가 지정한 추가 물량(증가 또는 감소)을 <strong>12개월 균등 배부</strong>하여 전망(outlook)에 반영합니다. 단위: <strong>천 톤</strong> (예: <code style="font-size: 11px; background: var(--surface); padding: 1px 6px;">+50</code>은 50,000톤 증가, <code style="font-size: 11px; background: var(--surface); padding: 1px 6px;">-30</code>은 30,000톤 감소). 매출·원재료비 등은 단가 동일 가정 하에 비례 조정됩니다.
+            <strong>축종별 물량 조정</strong>은 업로드된 <strong>실행계획 물량을 베이스</strong>로 사용자가 지정한 추가 물량(증가 또는 감소)을 <strong>마감되지 않은 잔여월에 물량 비율대로 배부</strong>하여 전망(outlook)에 반영합니다. 단위: <strong>천 톤</strong> (예: <code style="font-size: 11px; background: var(--surface); padding: 1px 6px;">+50</code>은 50,000톤 증가, <code style="font-size: 11px; background: var(--surface); padding: 1px 6px;">-30</code>은 30,000톤 감소). 매출·원재료비·변동비는 kg당 단가 동일 가정으로 비례 조정되고, 그 공헌이익 증감만큼 <strong>전망 OP·예상 OP</strong>가 함께 바뀝니다.
           </div>
           <div id="catQtyAdjustGrid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px;"></div>
           <div style="margin-top: 10px; padding: 10px 14px; background: linear-gradient(135deg, #fefcf6, var(--surface)); border-radius: 6px; border: 1px dashed var(--gold); font-size: 11.5px; color: var(--ink-2);">
-            💡 <strong>적용 결과:</strong> 추가 물량은 실행계획 물량에 월별 균등 배부 → 전망(outlook)이 갱신되어 시나리오·OP 시뮬레이션에 즉시 반영됩니다. <strong>비연동 필터와 독립적으로 작동</strong>합니다.
+            💡 <strong>적용 결과:</strong> 추가 물량은 잔여월 실행계획 물량에 비례 배부 → 전망(outlook)·비연동 물량이 갱신되어 시나리오·OP 시뮬레이션에 즉시 반영됩니다. <strong>비연동 필터와 독립적으로 작동</strong>합니다.
           </div>
         </div>
       </div>
@@ -3783,6 +3810,7 @@ body[data-width="full"]     { --content-max: none; }
           <button class="btn" data-preset="conservative" onclick="applyPreset('conservative')">📉 보수안 (저항 우선)</button>
           <button class="btn gold" data-preset="balanced" onclick="applyPreset('balanced')">⚖ 균형 권고 (회차 최소화)</button>
           <button class="btn" data-preset="aggressive" onclick="applyPreset('aggressive')">📈 적극안 (수익 회복 우선)</button>
+          <button class="btn" data-preset="custom" onclick="applyPreset('custom')">🎯 수기 목표안 (달성률 직접 입력)</button>
         </div>
       </div>
 
@@ -3981,8 +4009,16 @@ body[data-width="full"]     { --content-max: none; }
           </div>
         </div>
       </div>
+      <div class="card" style="margin-top: 10px !important;">
+        <div class="h">
+          <h3>📐 판가 Spread — 사업계획 대비 차질 <span class="help-i" data-tip="Spread = 판가(순매출액÷판매량) − 원재료비(원재료비÷판매량), 원/kg. 차질 = 전망 Spread − 사업계획 Spread. 차질 금액 = 차질 × 전망 물량. 인상 후 = 현재 선택한 시나리오·MODE 3 회차의 판가 인상분(비연동 물량 × 회수율)을 판가에 더한 값.">?</span></h3>
+          <span class="sub">PRICE − RAW MATERIAL · 원/kg</span>
+        </div>
+        <div id="priceSpreadDecision"><div style="font-size: 12px; color: var(--ink-3);">데이터를 업로드하면 축종별 판가 Spread가 표시됩니다.</div></div>
+      </div>
         </div>
       </div>
+
 
       <div class="card">
         <div class="h">
@@ -5648,6 +5684,11 @@ const PRESETS = {
     name: '적극 인상안', num: '3안',
     desc: '단기 OP 회복 우선 · 23원/kg → 룰상 2회 분할 (20+3)',
     set: { amount: 6, scope: 3, resist: 0, timing: 0, comm: 4 }   // 자동 룰
+  },
+  custom: {
+    name: '수기 목표안', num: '4안',
+    desc: '목표 달성률(%)을 직접 입력해 조정폭 역산',
+    set: { amount: 5, scope: 2, resist: 0, timing: 0, comm: 2 }   // 자동 룰
   }
 };
 
@@ -6120,7 +6161,38 @@ function _solveCatAmountsForAchievement(targetAchPct) {
   return result;
 }
 /* 3개 시나리오의 목표 달성 수준(%) 정의 — 사용자 요청: 1안 80% / 2안 90% / 3안 100% */
-const SCENARIO_ACH_TARGETS = { conservative: 80, balanced: 90, aggressive: 100 };
+const SCENARIO_ACH_TARGETS = {
+  conservative: 80, balanced: 90, aggressive: 100,
+  // 4안: 사용자가 판가 시나리오 화면에서 직접 입력한 목표 달성률(%)
+  get custom() { return _getCustomAchPct(); }
+};
+function _getCustomAchPct() {
+  const v = Number(typeof STATE !== 'undefined' ? STATE.customAchPct : NaN);
+  return Number.isFinite(v) && v > 0 ? v : 95;
+}
+function setCustomAchPct(value) {
+  const v = Math.round(Number(value));
+  if (!Number.isFinite(v) || v < 1 || v > 200) {
+    showToast('목표 달성률은 1~200% 사이로 입력해 주세요.', 'warn');
+    _syncCustomAchInput();
+    return;
+  }
+  const prev = _getCustomAchPct();
+  STATE.customAchPct = v;
+  _syncCustomAchInput();
+  if (prev !== v && typeof writeAuditLog === 'function') writeAuditLog('시나리오 조정', `4안 목표 달성률 ${prev}% → ${v}%`, 'AUTO SAVE', '사용자 조작');
+  // 4안이 선택돼 있으면 새 목표로 조정폭을 다시 역산해 보드·MODE 3까지 반영
+  if (STATE.scenario === 'custom') applyPreset('custom');
+  else save();
+  try { renderScenarioCards(); renderScenarioChart(); renderScenariosMonthly(); } catch (e) { console.warn('4안 갱신 실패', e); }
+}
+function _syncCustomAchInput() {
+  const pct = _getCustomAchPct();
+  const input = document.getElementById('customAchPct');
+  if (input && document.activeElement !== input) input.value = pct;
+  const title = document.getElementById('scen4Title');
+  if (title) title.textContent = `4안 · 수기 목표 (목표 ${pct}%)`;
+}
 /* ---------- 3. 핵심 계산 (회차 최소화 반영) ---------- */
 function compute() {
   // v38: 시나리오가 '목표 달성률 기반 역산 조정폭'을 지정하면 그 값을 우선 사용.
@@ -6530,7 +6602,7 @@ function goView(id) {
   save();
 
   setTimeout(() => {
-    if (id === 'view-status') { renderStatusCharts(); renderSpreadGap(); renderDataSummary(); renderStatusBasis(); if (typeof renderStatusCompare === 'function') renderStatusCompare(); }
+    if (id === 'view-status') { renderStatusCharts(); renderSpreadGap(); try { renderPriceSpread(); } catch (e) { console.warn(e); } renderDataSummary(); renderStatusBasis(); if (typeof renderStatusCompare === 'function') renderStatusCompare(); }
     if (id === 'view-market') renderMarketCharts();
     if (id === 'view-risk') renderChecks();
     if (id === 'view-scenario') {
@@ -6811,7 +6883,7 @@ function applyPreset(name) {
 function selectScenario(num) {
   // 양수: 인상 (1/2/3안) · 음수: 인하·동결 (-1=동결 / -2=소폭 인하 / -3=표준 인하)
   const map = {
-    1: 'conservative', 2: 'balanced', 3: 'aggressive',
+    1: 'conservative', 2: 'balanced', 3: 'aggressive', 4: 'custom',
     '-1': 'freeze', '-2': 'reductionMinor', '-3': 'reductionStandard'
   };
   const key = map[num] || map[String(num)] || 'balanced';
@@ -6870,8 +6942,9 @@ function renderImpact() {
 
   set('kpiAvg', `${_fmtSignedWon(r.amt, 1, '')}<span class="unit">원/kg</span>`);
   set('kpiAvgD', `시장 압력 ${Math.round(r.scopeWeight * 100)}% 반영`);
-  set('kpiOp', `${fmt.dec(r.opAnnual)}<span class="unit">억원</span>`);
-  set('kpiOpD', `달성률 ${r.achievement}%`);
+  const fin = _finalOpForDisplay(r);
+  set('kpiOp', `${fmt.dec(fin.op)}<span class="unit">억원</span>`);
+  set('kpiOpD', `달성률 ${fin.ach}%`);
   set('kpiEff', `${fmt.dec(r.efficiency)}<span class="unit">원/회</span>`);
   set('kpiEffD', `${r.rounds}회 (${r.startMonth}월~) · ${effGrade}`);
   const effD = document.getElementById('kpiEffD');
@@ -7119,7 +7192,7 @@ function runComplianceCheck() {
     scenarioNum: preset?.num || '—',
     amt: r.amt,
     rounds: r.rounds,
-    opAnnualOku: r.opAnnual,
+    opAnnualOku: _finalOpForDisplay(r).op,
     churn: r.churn,
     principles,
     risks,
@@ -8806,7 +8879,7 @@ function _hasUploadedScenarioData() {
 }
 
 function _setScenarioCardsPlaceholder() {
-  ['scen1', 'scen2', 'scen3'].forEach(prefix => {
+  ['scen1', 'scen2', 'scen3', 'scen4'].forEach(prefix => {
     ['Amt', 'Rounds', 'Op', 'Ach', 'Eff', 'Churn'].forEach(suffix => {
       const el = document.getElementById(`${prefix}${suffix}`);
       if (el) el.textContent = '산출전';
@@ -8841,8 +8914,8 @@ function _drawUploadRequiredCanvas(el, message) {
 
 function _getScenarioPreviewSet() {
   if (!_hasUploadedScenarioData()) return null;
-  const keys = ['conservative', 'balanced', 'aggressive'];
-  const idx = { conservative: 1, balanced: 2, aggressive: 3 };
+  const keys = ['conservative', 'balanced', 'aggressive', 'custom'];
+  const idx = { conservative: 1, balanced: 2, aggressive: 3, custom: 4 };
   try {
     return keys.map(key => {
       const targetPct = SCENARIO_ACH_TARGETS[key];
@@ -8860,6 +8933,7 @@ function _getScenarioPreviewSet() {
 }
 
 function renderScenarioCards() {
+  _syncCustomAchInput();
   // v39: 시나리오 역산 기준 배너 갱신 (현황 진단의 목표·전망 OP 기준임을 표시)
   const basisEl = document.getElementById('scenarioBasisText');
   const previews = _getScenarioPreviewSet();
@@ -8923,7 +8997,7 @@ function renderScenarioChart() {
     _drawUploadRequiredCanvas(el, '현황 진단 업로드 후 표시됩니다.');
     return;
   }
-  const names = { conservative: '보수', balanced: '균형', aggressive: '적극' };
+  const names = { conservative: '보수', balanced: '균형', aggressive: '적극', custom: '수기' };
   const labels = previews.map(p =>
     `${p.index}안 ${names[p.key]} (${_fmtSignedWon(p.result.amt, 1, '')}, ${p.result.rounds}회)${p.key === 'balanced' ? ' ★' : ''}`
   );
@@ -9012,15 +9086,16 @@ function renderScenariosMonthly() {
     }
     return result;
   }
-  const [s1, s2, s3] = previews.map(applyScenarioByRule);
+  const [s1, s2, s3, s4] = previews.map(applyScenarioByRule);
 
   // 선택된 시나리오 결정
   const selectedKey = STATE.scenario || 'balanced';
-  const selectedIdx = { conservative: 0, balanced: 1, aggressive: 2 }[selectedKey] ?? 1;
-  const scenarioSeries = [s1, s2, s3];
+  const selectedIdx = { conservative: 0, balanced: 1, aggressive: 2, custom: 3 }[selectedKey] ?? 1;
+  const scenarioSeries = [s1, s2, s3, s4];
   const selectedSeries = scenarioSeries[selectedIdx] || s2;
-  const scenarioLabels = ['1안 보수', '2안 균형 (권장)', '3안 적극'];
-  const scenarioColors = [C.navy2, C.gold, C.red];
+  const customPct = _getCustomAchPct();
+  const scenarioLabels = ['1안 보수', '2안 균형 (권장)', '3안 적극', `4안 수기 (${customPct}%)`];
+  const scenarioColors = [C.navy2, C.gold, C.red, '#7c3aed'];
   const actualMarker = actualUntil > 0
     ? [{ x: actualUntil - 0.5, label: '실적 / 추정', color: '#64748b', dash: [4, 4], labelPos: 'bottom' }]
     : [];
@@ -9070,6 +9145,15 @@ function renderScenariosMonthly() {
           tension: 0.3, borderWidth: selectedIdx === 2 ? 3 : 2,
           pointRadius: selectedIdx === 2 ? 5 : 3,
           pointBackgroundColor: selectedIdx === 2 ? C.red : '#fff',
+          fill: false
+        },
+        {
+          label: `4안 수기 (${customPct}%)` + (selectedIdx === 3 ? ' (선택)' : ''),
+          data: s4.map(v => Math.round(v*10)/10),
+          borderColor: '#7c3aed', backgroundColor: '#7c3aed20',
+          tension: 0.3, borderWidth: selectedIdx === 3 ? 3 : 2,
+          pointRadius: selectedIdx === 3 ? 5 : 3,
+          pointBackgroundColor: selectedIdx === 3 ? '#7c3aed' : '#fff',
           fill: false
         }
       ]
@@ -9639,10 +9723,11 @@ function _syncFromMode3ToMode12() {
   } else {
     STATE.catManualAmounts = _getCatRecommendedAmounts(totalAmt);
   }
-  // UI 재렌더
+  // UI 재렌더 — v46: MODE 3 축종별 예상 OP 표도 새 금액으로 다시 계산
   renderManualCatInputs();
   _updateMode1Display();
   recalcManualOpEstimate();
+  renderRoundSchedulePolicy();
   _renderFinalCharts();
   save();
 }
@@ -9886,6 +9971,7 @@ function renderRoundSchedulePolicy() {
   }
 
   _renderMode3CatOpSummary(finalCats, r);
+  try { renderPriceSpread(); } catch (e) { console.warn('판가 Spread 표 갱신 실패', e); }
 
   if (manualEl) {
     const schedule = _getScheduleForFinal(selectedCat);
@@ -10008,6 +10094,35 @@ function updateCatScheduleField(cat, idx, field, value) {
   _renderFinalCharts();
   renderDecisionCharts();
   save();
+}
+
+/* v48: 엑셀 판가조정 시트 금액(실행계획에 들어 있던 인상)을 MODE 3 축종별 회차로 넣는다.
+   전망은 이 인상을 뺀 '인상 전' 기준이므로, 여기 넣은 값을 고치면 예상 OP가 바로 바뀐다. */
+function applyExecPriceAdjToMode3(silent) {
+  const adj = DATA.platformInfo?.execPriceAdj;
+  if (!adj) { if (!silent) showToast('업로드 파일에 판가조정 시트 금액이 없습니다.', 'warn'); return false; }
+  const cm = Number(DATA.currentMonth) || 0;
+  const next = {};
+  _getPricingGroups().forEach(g => {
+    const rows = Object.entries(adj[g.cat || g.key] || {})
+      .map(([m, v]) => ({ month: +m, amt: Math.round(+v * 10) / 10 }))
+      .filter(x => x.month > cm && x.amt)
+      .sort((a, b) => a.month - b.month);
+    // 조정이 없는 축종은 0원 회차로 고정(시나리오 금액이 섞이지 않게)
+    next[g.key] = (rows.length ? rows : [{ month: Math.min(12, cm + 1), amt: 0 }]).map((x, i) => ({ round: i + 1, ...x }));
+  });
+  STATE.catSchedules = next;
+  if (silent) return true;
+  writeAuditLog('단위별 회차 정책 조정', `MODE 3 축종별 회차를 엑셀 판가조정 시트 값으로 설정 (${Object.entries(adj).map(([c, m]) => `${c} ${Object.entries(m).map(([mon, v]) => `${mon}월 ${v}원`).join('·')}`).join(' / ')})`, 'AUTO SAVE', '사용자 조작');
+  renderManualCatInputs();
+  _updateMode1Display();
+  recalcManualOpEstimate();
+  renderRoundSchedulePolicy();
+  _renderFinalCharts();
+  renderDecisionCharts();
+  save();
+  showToast('엑셀 판가조정 값을 MODE 3 축종별 회차에 넣었습니다.', 'ok');
+  return true;
 }
 
 function resetCatSchedule(cat) {
@@ -10259,11 +10374,21 @@ function renderScenarioBanner() {
   const startMonthLabel = r.scheduleMonths.length === 1 ? `${r.scheduleMonths[0]}월 일괄` : `${r.scheduleMonths.map(m => m + '월').join(' / ')}`;
   titleEl.textContent = `${scenName} · 평균 ${_fmtSignedWon(r.amt)}/kg · ${r.rounds}회 (${startMonthLabel})`;
   if (kpiEl) {
+    const fin = _finalOpForDisplay(r);
     kpiEl.innerHTML = `
-      <div><span style="color: #94a3b8;">예상 OP 영향</span> <strong style="color: ${r.opAnnual >= 0 ? 'var(--gold)' : 'var(--danger)'}; font-size: 14px;">${_fmtSignedOku(r.opAnnual)}</strong></div>
-      <div><span style="color: #94a3b8;">달성률</span> <strong style="color: var(--gold); font-size: 14px;">${r.achievement}%</strong></div>
+      <div><span style="color: #94a3b8;">예상 OP 영향</span> <strong style="color: ${fin.op >= 0 ? 'var(--gold)' : 'var(--danger)'}; font-size: 14px;">${_fmtSignedOku(fin.op)}</strong></div>
+      <div><span style="color: #94a3b8;">달성률</span> <strong style="color: var(--gold); font-size: 14px;">${fin.ach}%</strong></div>
     `;
   }
+}
+
+/* v46: 화면에 보이는 '예상 OP(인상 후)'는 MODE 3 축종별 표와 같은 값(축종별 회차 × 비연동 물량 합계)을 쓴다.
+   compute().opAnnual은 전사 평균 금액 기준이라 축종별 금액이 다르면 표와 어긋난다. */
+function _finalOpForDisplay(r) {
+  if (!(DATA.loaded && DATA.agg)) return { op: r.opAnnual, ach: r.achievement };
+  const agg = _calcAggregateFinalMonthlyOp(_getFinalCatAmounts(r), parseFloat(document.getElementById('revRecovery')?.value || 80) / 100);
+  const op = Math.round(agg.finalTotalOku * 10) / 10;
+  return { op, ach: agg.planTotalOku > 0 ? Math.round(op / agg.planTotalOku * 100) : 0 };
 }
 
 /* === 축종별 최종 결과 탭/OP 산출 공통 유틸 (상수는 상단에서 일괄 정의) === */
@@ -10826,6 +10951,118 @@ function _calcAggregateFinalMonthlyOp(finalCats, recovery) {
   };
 }
 
+/* === v48: 판가 Spread(판가 − 원재료비, 원/kg) 사업계획 대비 차질 === */
+function _priceSpreadStats() {
+  if (!DATA.loaded || !DATA.agg?.plan || !DATA.agg?.outlook) return null;
+  const A = DATA.agg;
+  const cm = Math.max(0, Math.min(12, Number(DATA.currentMonth) || 0));
+  const recovery = parseFloat(document.getElementById('revRecovery')?.value || 80) / 100;
+  // 현재 선택안(시나리오·MODE 3 회차)의 월별 판가 인상분(원) — MODE 3 표·예상 OP와 같은 산식
+  const lift = {};
+  _getPricingGroups().forEach(g => {
+    const cat = g.cat || g.key;
+    const sch = _getScheduleForFinal(g.key);
+    const l = _calcScheduledPriceLift(_getOpDataBundle(g.key), sch.scheduleAmounts, sch.scheduleMonths, recovery);
+    lift[cat] = (lift[cat] || Array(12).fill(0)).map((v, i) => v + (l.monthlyLiftOku[i] || 0) * 1e8);
+  });
+  const cats = [...CATS, ...Object.keys(A.outlook.byCategory || {}).filter(c => !CATS.includes(c))]
+    .filter(c => (A.outlook.byCategory?.[c]?.qty?.total || 0) > 0 && (A.plan.byCategory?.[c]?.qty?.total || 0) > 0);  // 물량 없는 유통 등 제외
+  const sum = (b, m, from, to) => { let t = 0; for (let i = from; i < to; i++) t += b?.[m]?.months?.[i] || 0; return t; };
+  const sp = (b, from, to, add) => {
+    const q = sum(b, 'qty', from, to);
+    if (!(q > 0)) return null;
+    let extra = 0; if (add) for (let i = from; i < to; i++) extra += add[i] || 0;
+    const price = (sum(b, 'rev', from, to) + extra) / q, raw = sum(b, 'rawMat', from, to) / q;
+    return { q, price, raw, spread: price - raw };
+  };
+  const merge = (list) => {   // 축종 합산 버킷(가중 평균용)
+    const out = {};
+    ['qty', 'rev', 'rawMat'].forEach(m => { out[m] = { months: Array(12).fill(0) }; list.forEach(b => b?.[m]?.months?.forEach((v, i) => { out[m].months[i] += v || 0; })); });
+    return out;
+  };
+  const row = (cat, P, O, Ac, L) => {
+    const plan = sp(P, 0, 12), out = sp(O, 0, 12), after = sp(O, 0, 12, L);
+    const monthly = Array.from({ length: 12 }, (_, i) => {
+      const p = sp(P, i, i + 1), o = sp(O, i, i + 1), a = sp(O, i, i + 1, L);
+      return { plan: p?.spread, out: o?.spread, after: a?.spread, gap: p && o ? o.spread - p.spread : null, gapAfter: p && a ? a.spread - p.spread : null, lift: (L?.[i] || 0) > 0 };
+    });
+    const gap = plan && out ? out.spread - plan.spread : null;
+    const gapAfter = plan && after ? after.spread - plan.spread : null;
+    return {
+      cat, plan, out, after, gap, gapAfter,
+      act: cm > 0 ? sp(Ac, 0, cm) : null,
+      remPlan: cm < 12 ? sp(P, cm, 12) : null, remOut: cm < 12 ? sp(O, cm, 12) : null,
+      gapOku: gap != null ? gap * out.q / 1e8 : null,
+      gapAfterOku: gapAfter != null ? gapAfter * after.q / 1e8 : null,
+      monthly
+    };
+  };
+  const rows = cats.map(c => row(c, A.plan.byCategory[c], A.outlook.byCategory[c], A.actual?.byCategory?.[c], lift[c]));
+  const liftAll = Array(12).fill(0); cats.forEach(c => (lift[c] || []).forEach((v, i) => { liftAll[i] += v; }));
+  const total = row('합계', merge(cats.map(c => A.plan.byCategory[c])), merge(cats.map(c => A.outlook.byCategory[c])),
+    merge(cats.map(c => A.actual?.byCategory?.[c])), liftAll);
+  return { cm, rows, total };
+}
+function renderPriceSpread() {
+  const targets = ['priceSpreadDecision', 'priceSpreadStatus'].map(id => document.getElementById(id)).filter(Boolean);
+  if (!targets.length) return;
+  const st = _priceSpreadStats();
+  if (!st || !st.rows.length) {
+    targets.forEach(el => { el.innerHTML = '<div style="font-size: 12px; color: var(--ink-3);">판매량·순매출액·원재료비가 있는 데이터를 업로드하면 축종별 판가 Spread가 표시됩니다.</div>'; });
+    return;
+  }
+  const n1 = v => (v == null || !isFinite(v) ? '—' : v.toFixed(1));
+  const sg = (v, d = 1) => (v == null || !isFinite(v) ? '—' : `<span style="color:${v < -0.05 ? 'var(--danger)' : v > 0.05 ? 'var(--success)' : 'var(--ink-3)'}; font-weight:700;">${v > 0 ? '+' : ''}${v.toFixed(d)}</span>`);
+  const cm = st.cm;
+  const recov = r => (r.gap != null && r.gap < -0.05 && r.gapAfter != null) ? `${Math.round((r.gapAfter - r.gap) / -r.gap * 100)}%` : '—';
+  const line = (r, isTotal) => `<tr${isTotal ? ' style="font-weight:700; background: var(--surface-2);"' : ''}>
+    <td>${r.cat}</td>
+    <td class="num">${n1(r.plan?.price)} / ${n1(r.out?.price)}</td>
+    <td class="num">${n1(r.plan?.raw)} / ${n1(r.out?.raw)}</td>
+    <td class="num"><strong>${n1(r.plan?.spread)}</strong></td>
+    <td class="num">${n1(r.act?.spread)}</td>
+    <td class="num">${n1(r.remPlan?.spread)} / ${n1(r.remOut?.spread)}</td>
+    <td class="num"><strong>${n1(r.out?.spread)}</strong></td>
+    <td class="num">${sg(r.gap)}</td>
+    <td class="num">${sg(r.gapOku)}</td>
+    <td class="num">${n1(r.after?.spread)}</td>
+    <td class="num">${sg(r.gapAfter)}</td>
+    <td class="num">${recov(r)}</td>
+  </tr>`;
+  const mHead = Array.from({ length: 12 }, (_, i) => `<th style="text-align:right;">${i + 1}월<div style="font-size:9px; font-weight:400; color:var(--ink-3);">${i < cm ? '실적' : '실행'}</div></th>`).join('');
+  const mLine = (r, isTotal) => `<tr${isTotal ? ' style="font-weight:700; background: var(--surface-2);"' : ''}><td>${r.cat}</td>${r.monthly.map(m => `<td class="num" data-tip="계획 ${n1(m.plan)} · 전망 ${n1(m.out)}${m.lift ? ` · 인상 후 ${n1(m.after)}` : ''} 원/kg">${sg(m.gap)}${m.lift ? `<div style="font-size:9.5px;">→ ${sg(m.gapAfter)}</div>` : ''}</td>`).join('')}<td class="num">${sg(r.gap)}${r.monthly.some(m => m.lift) ? `<div style="font-size:9.5px;">→ ${sg(r.gapAfter)}</div>` : ''}</td></tr>`;
+  const worst = st.rows.filter(r => r.gapOku != null).sort((a, b) => a.gapOku - b.gapOku)[0];
+  const html = `
+    <div style="font-size: 11.5px; color: var(--ink-2); margin-bottom: 8px; line-height: 1.55;">
+      판가 Spread = 판가 − 원재료비(원/kg). <strong>차질 = 전망 − 사업계획</strong>(음수 = 목표 미달), 차질 금액 = 차질 × 전망 물량.
+      ${worst && worst.gapOku < -0.05 ? `가장 큰 차질은 <strong style="color:var(--danger);">${worst.cat} ${worst.gap.toFixed(1)}원/kg (${worst.gapOku.toFixed(1)}억)</strong>입니다.` : ''}
+      '인상 후'는 지금 선택한 시나리오·MODE 3 회차의 판가 인상분을 더한 값입니다.
+    </div>
+    <div style="overflow-x:auto;"><table class="tbl" style="font-size: 11px; min-width: 980px; white-space: nowrap;">
+      <thead><tr>
+        <th>축종</th>
+        <th style="text-align:right;">판가<div style="font-size:9px; font-weight:400;">계획 / 전망</div></th>
+        <th style="text-align:right;">원재료비<div style="font-size:9px; font-weight:400;">계획 / 전망</div></th>
+        <th style="text-align:right;">Spread<div style="font-size:9px; font-weight:400;">사업계획</div></th>
+        <th style="text-align:right;">Spread<div style="font-size:9px; font-weight:400;">실적 1~${cm}월</div></th>
+        <th style="text-align:right;">Spread 잔여월<div style="font-size:9px; font-weight:400;">${cm < 12 ? `${cm + 1}~12월 ` : ''}계획 / 실행</div></th>
+        <th style="text-align:right;">Spread<div style="font-size:9px; font-weight:400;">연간 전망</div></th>
+        <th style="text-align:right;">차질<div style="font-size:9px; font-weight:400;">원/kg</div></th>
+        <th style="text-align:right;">차질 금액<div style="font-size:9px; font-weight:400;">억원</div></th>
+        <th style="text-align:right;">인상 후<div style="font-size:9px; font-weight:400;">Spread</div></th>
+        <th style="text-align:right;">인상 후 차질<div style="font-size:9px; font-weight:400;">원/kg</div></th>
+        <th style="text-align:right;">차질 회복률</th>
+      </tr></thead>
+      <tbody>${st.rows.map(r => line(r)).join('')}${line(st.total, true)}</tbody>
+    </table></div>
+    <div style="font-size: 12px; font-weight: 700; color: var(--ink); margin: 12px 0 6px;">월별 Spread 차질 (전망 − 사업계획, 원/kg) <span style="font-weight:400; font-size:11px; color:var(--ink-3);">· 아래 '→' 값은 판가 인상 후</span></div>
+    <div style="overflow-x:auto;"><table class="tbl" style="font-size: 10.5px; min-width: 980px; white-space: nowrap;">
+      <thead><tr><th>축종</th>${mHead}<th style="text-align:right;">연간</th></tr></thead>
+      <tbody>${st.rows.map(r => mLine(r)).join('')}${mLine(st.total, true)}</tbody>
+    </table></div>`;
+  targets.forEach(el => { el.innerHTML = html; });
+}
+
 function _renderMode3CatOpSummary(finalCats, r) {
   const el = document.getElementById('mode3CatOpSummary');
   if (!el) return;
@@ -10843,8 +11080,20 @@ function _renderMode3CatOpSummary(finalCats, r) {
     return { cat, sch, c };
   });
 
+  // v48: 영업이익률 = 영업이익 ÷ 순매출액. 예상 매출 = 전망 매출 + 판가 인상분
+  const revOku = (key, which) => {
+    const a = DATA.agg?.[which];
+    const m = String(key).includes('|') ? (a?.byMid?.[key]?.metrics?.rev || a?.bySmall?.[key]?.metrics?.rev) : a?.byCategory?.[key]?.rev;
+    return m ? (m.total || 0) / 1e8 : null;
+  };
+  const marginTag = (op, rev) => (rev && Math.abs(rev) > 0.0001)
+    ? `<br><span style="font-size:8.5px; font-weight:400; color:${op < 0 ? 'var(--danger)' : 'var(--ink-3)'};">이익률 ${(op / rev * 100).toFixed(1)}%</span>` : '';
+  let sumRevPlan = 0, sumRevOut = 0, sumRevFinal = 0;
   const rows = rowData.map(({ cat, sch, c }) => {
     const active = selected === cat;
+    const rPlan = revOku(cat, 'plan'), rOut = revOku(cat, 'outlook');
+    const rFinal = rOut != null ? rOut + (c.expectedAddOku || 0) : null;
+    sumRevPlan += rPlan || 0; sumRevOut += rOut || 0; sumRevFinal += rFinal || 0;
     const label = _getPricingGroupLabel(cat, _getPricingGroupLevel() === 'mid');
     const sourceLabel = sch.source === 'cat-manual' ? '직접' : '룰';
     // 전망 OP(판가 인상 전) → 예상 OP(인상 후) 증가분
@@ -10860,17 +11109,17 @@ function _renderMode3CatOpSummary(finalCats, r) {
       ? `<span style="color:var(--danger); font-weight:700;" title="전망이 적자라 '예상÷목표' 달성률은 음수로 왜곡됩니다. 괄호는 인상이 목표까지의 격차를 메운 비율(격차 해소율)입니다.">${c.ach}%</span><br><span style="font-size:8.5px; color:var(--gold); font-weight:600;">격차해소 ${gapClosed}%</span>`
       : `<span style="color:${achColor}; font-weight:700;">${c.ach}%</span>`;
     // v44: 조정폭이 회차당 상한(일반 100·양어 500)에 도달했는지 표시
-    const catAmt = finalCats?.[cat] || 0;
+    const catAmt = sch.scheduleAmounts.reduce((s, v) => s + (Number(v) || 0), 0); // v46: 손익에 실제 적용된 회차 합계
     const catCap = (_getParentCatFromGroupKey(cat) === '양어') ? 500 : 100;
-    const atCap = catAmt >= catCap - 0.5;
+    const atCap = Math.max(0, ...sch.scheduleAmounts.map(Number).filter(Number.isFinite)) >= catCap - 0.5; // 회차당 상한
     const capTag = atCap
       ? `<br><span style="font-size:8px; color:var(--danger); font-weight:600;" title="회차당 최대 조정폭 상한 도달 — 판가만으로 목표 달성 한계. 물량·원가 대책 병행 필요">상한 도달</span>`
       : '';
     return `<tr style="${active ? 'background: var(--gold-bg, #fef9e8);' : ''}">
       <td style="font-weight: 700; color: ${active ? 'var(--gold)' : 'var(--ink)'};">${label}</td>
-      <td style="text-align:right; font-family: var(--font-mono);">${c.planTotalOku.toFixed(1)}억</td>
-      <td style="text-align:right; font-family: var(--font-mono); color:${c.outlookTotalOku < 0 ? 'var(--danger)' : 'var(--ink-3)'};">${c.outlookTotalOku.toFixed(1)}억</td>
-      <td style="text-align:right; font-family: var(--font-mono); color:${c.finalTotalOku < 0 ? 'var(--danger)' : 'var(--ink)'};">${c.finalTotalOku.toFixed(1)}억${deltaStr}</td>
+      <td style="text-align:right; font-family: var(--font-mono);">${c.planTotalOku.toFixed(1)}억${marginTag(c.planTotalOku, rPlan)}</td>
+      <td style="text-align:right; font-family: var(--font-mono); color:${c.outlookTotalOku < 0 ? 'var(--danger)' : 'var(--ink-3)'};">${c.outlookTotalOku.toFixed(1)}억${marginTag(c.outlookTotalOku, rOut)}</td>
+      <td style="text-align:right; font-family: var(--font-mono); color:${c.finalTotalOku < 0 ? 'var(--danger)' : 'var(--ink)'};">${c.finalTotalOku.toFixed(1)}억${deltaStr}${marginTag(c.finalTotalOku, rFinal)}</td>
       <td style="text-align:right; font-family: var(--font-mono);">${achCell}</td>
       <td style="text-align:right; font-family: var(--font-mono); color:var(--gold); font-weight:700;">${_fmtSignedWon(catAmt)} <span style="font-size:9px; color:var(--ink-3);">${sourceLabel}</span>${capTag}</td>
     </tr>`;
@@ -10887,9 +11136,9 @@ function _renderMode3CatOpSummary(finalCats, r) {
     : `<span style="color:${sumAchColor}; font-weight:800;">${sumAch}%</span>`;
   const totalRow = `<tr style="background: linear-gradient(135deg, #fefcf6, var(--surface-2)); border-top: 2px solid var(--gold);">
     <td style="font-weight: 800; color: var(--accent);">합계</td>
-    <td style="text-align:right; font-family: var(--font-mono); font-weight: 800; color: var(--accent);">${sumPlan.toFixed(1)}억</td>
-    <td style="text-align:right; font-family: var(--font-mono); font-weight: 700; color:${sumOutlook < 0 ? 'var(--danger)' : 'var(--ink-2)'};">${sumOutlook.toFixed(1)}억</td>
-    <td style="text-align:right; font-family: var(--font-mono); font-weight: 800; color: var(--accent);">${sumFinal.toFixed(1)}억${sumDeltaStr}</td>
+    <td style="text-align:right; font-family: var(--font-mono); font-weight: 800; color: var(--accent);">${sumPlan.toFixed(1)}억${marginTag(sumPlan, sumRevPlan)}</td>
+    <td style="text-align:right; font-family: var(--font-mono); font-weight: 700; color:${sumOutlook < 0 ? 'var(--danger)' : 'var(--ink-2)'};">${sumOutlook.toFixed(1)}억${marginTag(sumOutlook, sumRevOut)}</td>
+    <td style="text-align:right; font-family: var(--font-mono); font-weight: 800; color: var(--accent);">${sumFinal.toFixed(1)}억${sumDeltaStr}${marginTag(sumFinal, sumRevFinal)}</td>
     <td style="text-align:right; font-family: var(--font-mono);">${sumAchCell}</td>
     <td style="text-align:right; font-family: var(--font-mono); color: var(--ink-3); font-size: 9.5px;">전체</td>
   </tr>`;
@@ -10903,7 +11152,8 @@ function _renderMode3CatOpSummary(finalCats, r) {
   const scenInfo = {
     conservative: { name: '1안 · 전년 수준', pct: 80 },
     balanced:     { name: '2안 · 균형 회복', pct: 90 },
-    aggressive:   { name: '3안 · 목표 달성', pct: 100 }
+    aggressive:   { name: '3안 · 목표 달성', pct: 100 },
+    custom:       { name: '4안 · 수기 목표', pct: _getCustomAchPct() }
   }[STATE.scenario];
   const scenLabel = scenInfo
     ? `<strong style="color: var(--accent);">${scenInfo.name} (목표 ${scenInfo.pct}%)</strong>`
@@ -10912,7 +11162,10 @@ function _renderMode3CatOpSummary(finalCats, r) {
     <div style="margin-top: 8px; padding: 8px 10px; background: var(--surface-2); border-radius: 6px; border: 1px solid var(--line);">
       <div style="font-size: 10.5px; color: var(--ink-3); margin-bottom: 5px; line-height: 1.6;">
         <strong style="color: var(--ink);">축종별 목표 OP 대비 예상 OP</strong> · 시나리오: ${scenLabel} · 회차: ${roundLabel}
-        <div style="margin-top:3px; color: var(--ink-4); font-size: 9.5px;">전망 OP = 판가 인상 전(Outlook) · 예상 OP = 인상 후(괄호는 인상 효과 +억) · 달성율 = 예상 OP ÷ 목표 OP. <strong style="color:var(--gold);">전망이 적자면</strong> 달성률이 음수로 왜곡되므로 격차 해소율(=(예상−전망)÷(목표−전망))을 병기합니다. <strong style="color:var(--accent);">조정폭은 축종별로 자기 목표×시나리오%에 도달하도록 개별 역산</strong>됩니다. '상한 도달' 표시 축종은 판가만으로 목표 달성이 어려워 물량·원가 대책 병행이 필요합니다. 축종별 세부 조정은 위 슬라이더에서 가능합니다.</div>
+        ${(DATA.qtyFilledFromPlan || []).length ? `<div style="margin-top:3px; color: var(--danger); font-size: 10px;">⚠ 실행계획에 판매량이 없어 잔여월 물량을 <strong>사업계획 물량 × (실행 매출 ÷ 계획 매출)</strong>로 추정했습니다(${DATA.qtyFilledFromPlan.join('·')}). 실행계획 판매량을 넣어 올리면 정확해집니다.</div>` : ''}
+        ${DATA.platformInfo ? `<div style="margin-top:3px; color: var(--ink-2); font-size: 10px;">ℹ 실행계획 Platform 파일(BD 시트)로 읽었습니다 · 실적 1~${DATA.platformInfo.cm}월 · 실행계획 ${DATA.platformInfo.execMonths.join('·')}월${DATA.platformInfo.linkedFromSpread ? ` · 연동/비연동은 비연동 Spread 시트 물량 비중으로 나눔${(DATA.platformInfo.pnlShareMonths || []).length ? `(${DATA.platformInfo.pnlShareMonths.join('·')}월은 P&L 시트 품목 판매량 기준)` : ''}` : ' · <span style="color:var(--danger)">비연동 Spread 시트가 없어 전량 비연동으로 계산</span>'}${(DATA.platformInfo.noLinkedCats || []).length ? ` (${DATA.platformInfo.noLinkedCats.join('·')}은 연동 구분 없음 → 전량 비연동)` : ''}.${DATA.platformInfo.execPriceAdj ? ` <strong>실행계획에 들어 있던 판가 조정(${Object.entries(DATA.platformInfo.execPriceAdj).map(([c, m]) => `${c} ${Object.entries(m).map(([mon, v]) => `${mon}월 ${v > 0 ? '+' : ''}${v}원`).join('·')}`).join(' / ')}, 영업이익 ${((DATA.platformInfo.execPriceAdjRemovedWon || 0) / 1e8).toFixed(1)}억)은 전망에서 빼고 '인상 전' 기준으로 계산합니다.</strong> 업로드할 때 이 금액을 MODE 3 축종별 회차에 넣어 두었으니 위 MANUAL 칸에서 월·금액을 고치면 예상 OP에 바로 반영됩니다(시나리오를 고르면 시나리오 금액으로 바뀜). <button class="btn" style="font-size:10px; padding:2px 8px; margin-left:4px;" onclick="applyExecPriceAdjToMode3()">↺ 엑셀 판가조정 값 다시 넣기</button>` : ''}</div>` : ''}
+        ${(DATA.costFilledFromPlan || []).length ? `<div style="margin-top:2px; color: var(--danger); font-size: 10px;">⚠ 실행계획에 원가 행이 없어 잔여월 원가를 <strong>(매출 − 영업이익) × 사업계획 원가 구성비</strong>로 추정했습니다(${DATA.costFilledFromPlan.join('·')}). 영업이익은 업로드 값 그대로입니다.</div>` : ''}
+        <div style="margin-top:3px; color: var(--ink-4); font-size: 9.5px;">전망 OP = 판가 인상 전(Outlook) · 예상 OP = 인상 후(괄호는 인상 효과 +억) · 이익률 = 영업이익 ÷ 순매출액(예상은 인상분 매출 포함) · 달성율 = 예상 OP ÷ 목표 OP. <strong style="color:var(--gold);">전망이 적자면</strong> 달성률이 음수로 왜곡되므로 격차 해소율(=(예상−전망)÷(목표−전망))을 병기합니다. <strong style="color:var(--accent);">조정폭은 축종별로 자기 목표×시나리오%에 도달하도록 개별 역산</strong>됩니다. '상한 도달' 표시 축종은 판가만으로 목표 달성이 어려워 물량·원가 대책 병행이 필요합니다. 축종별 세부 조정은 위 슬라이더에서 가능합니다.</div>
       </div>
       <table class="tbl" style="font-size: 10.5px; margin: 0; table-layout: fixed; width: 100%;">
         <colgroup>
@@ -11359,10 +11612,11 @@ function handleTrackingUpload(event) {
   }
 
   const reader = new FileReader();
-  reader.onload = e => {
+  reader.onload = async e => {
     try {
       const t0 = performance.now();
-      const wb = XLSX.read(e.target.result, { type: 'binary' });
+      const wb = _readDpdsWorkbook(e.target.result, 'binary');
+      if (_isPlatformSheetSet(wb.SheetNames)) wb.__pnlQty = await _readPlatformPnlQty(_binaryStringToBytes(e.target.result));
       // ingestWorkbook을 직접 부르면 DATA가 갱신되므로, 임시 워크북을 별도 파싱
       // 간편하게 그대로 ingestWorkbook 호출 → DATA 갱신 + 새로운 currentMonth 등 자동 반영
       ingestWorkbook(wb, 'upload', file.name);
@@ -13290,64 +13544,136 @@ function _deriveGP(agg) {
   });
 }
 
-/* === 축종별 추가 물량 (±) 적용 — 월별 균등 배부 (v32) ===
-   추가 물량 = STATE.catQtyAdjust[cat] (단위: kg, 양수=증가/음수=감소)
-   적용 방식: outlook.byCategory[cat].qty의 12개월에 균등 배부 (월별 +qtyDelta/12)
-   매출/원재료비/제조비 등 다른 metric은 단가/원단위 비율로 비례 증감 */
-function _applyCatQtyAdjust(outlook, execution, catAdjust) {
-  if (!catAdjust || !outlook?.byCategory) return;
+/* === 축종별 추가 물량 (±) 적용 (v32 → v46) ===
+   추가 물량 = STATE.catQtyAdjust[cat] (kg, 양수=증가/음수=감소) — 잔여월에 물량 비율대로 배부, 공헌이익 증감을 OP에 반영 */
+const _COST_METRICS = ['rawMat', 'mfgVar', 'mfgFix', 'salesVar', 'salesFix', 'ga'];
+function _fillOpenCostsFromPlan(outlook, plan, currentMonth) {
+  // v46: 실행계획에 매출·영업이익만 있고 원가 행이 없으면 매출총이익·구성요소 OP가 '매출 전액 = 이익'으로 부풀려진다.
+  //      그런 잔여월은 원가 합계 = 매출 − 업로드 영업이익으로 맞추고, 사업계획 같은 달의 원가 구성비로 나눈다(영업이익은 그대로).
+  const cm = Math.max(0, Math.min(12, Number(currentMonth) || 0));
+  const filled = new Set();
+  const fix = (o, p, label) => {
+    if (!o?.rev?.months || !o?.op?.months || !p) return;
+    let hit = false;
+    for (let i = cm; i < 12; i++) {
+      const rev = o.rev.months[i] || 0;
+      if (!rev || _COST_METRICS.some(m => Math.abs(o[m]?.months?.[i] || 0) > 0)) continue;
+      const planCost = _COST_METRICS.reduce((s, m) => s + (p[m]?.months?.[i] || 0), 0);
+      if (!(planCost > 0)) continue;
+      const need = rev - (o.op.months[i] || 0);
+      _COST_METRICS.forEach(m => {
+        if (!o[m]) o[m] = { months: Array(12).fill(0), total: 0 };
+        o[m].months[i] = need * (p[m]?.months?.[i] || 0) / planCost;
+      });
+      if (!o.gp) o.gp = { months: Array(12).fill(0), total: 0 };
+      o.gp.months[i] = rev - o.rawMat.months[i] - o.mfgVar.months[i] - o.mfgFix.months[i];
+      if (o.opCalc?.months) o.opCalc.months[i] = o.op.months[i];
+      hit = true;
+    }
+    if (!hit) return;
+    [..._COST_METRICS, 'gp', 'opCalc'].forEach(m => { if (o[m]?.months) o[m].total = o[m].months.reduce((s, v) => s + v, 0); });
+    if (label) filled.add(label);
+  };
+  if (!outlook || !plan) return [];
+  Object.keys(outlook.byCategory || {}).forEach(c => fix(outlook.byCategory[c], plan.byCategory?.[c], c));
+  Object.keys(outlook.byMid || {}).forEach(k => fix(outlook.byMid[k].metrics, plan.byMid?.[k]?.metrics));
+  Object.keys(outlook.bySmall || {}).forEach(k => fix(outlook.bySmall[k].metrics, plan.bySmall?.[k]?.metrics));
+  if (filled.size) {
+    [..._COST_METRICS, 'gp', 'opCalc'].forEach(m => {
+      const months = Array(12).fill(0);
+      Object.values(outlook.byCategory).forEach(c => { if (c?.[m]?.months) for (let i = 0; i < 12; i++) months[i] += c[m].months[i]; });
+      outlook.byMetric[m] = { months, total: months.reduce((s, v) => s + v, 0) };
+    });
+  }
+  return [...filled];
+}
+function _fillOpenQtyFromPlan(outlook, plan, currentMonth) {
+  // v46: 실행계획 시트에 판매량 행이 없으면 잔여월 물량이 0이 되어 판가 인상 효과(조정폭 × 물량)가 사라진다.
+  //      해당 월 실행 매출이 있으면 사업계획 물량 × (실행 매출 ÷ 계획 매출)로 추정해 채운다. 채운 축종 목록을 반환.
+  const cm = Math.max(0, Math.min(12, Number(currentMonth) || 0));
+  const filled = new Set();
+  const fill = (o, p, label) => {
+    if (!o?.rev?.months || !p?.qty?.months) return;
+    if (!o.qty) o.qty = { months: Array(12).fill(0), total: 0 };
+    let hit = false;
+    for (let i = cm; i < 12; i++) {
+      if (Math.abs(o.qty.months[i] || 0) > 0 || !(o.rev.months[i] > 0) || !(p.qty.months[i] > 0)) continue;
+      const pr = p.rev?.months?.[i] || 0;
+      o.qty.months[i] = pr > 0 ? p.qty.months[i] * (o.rev.months[i] / pr) : p.qty.months[i];
+      hit = true;
+    }
+    if (hit) { o.qty.total = o.qty.months.reduce((s, v) => s + v, 0); if (label) filled.add(label); }
+  };
+  if (!outlook || !plan) return [];
+  Object.keys(outlook.byCategory || {}).forEach(c => fill(outlook.byCategory[c], plan.byCategory?.[c], c));
+  Object.keys(outlook.byMid || {}).forEach(k => fill(outlook.byMid[k].metrics, plan.byMid?.[k]?.metrics));
+  Object.keys(outlook.bySmall || {}).forEach(k => fill(outlook.bySmall[k].metrics, plan.bySmall?.[k]?.metrics));
+  if (filled.size && outlook.byMetric?.qty) {
+    const months = Array(12).fill(0);
+    Object.values(outlook.byCategory).forEach(c => { if (c?.qty?.months) for (let i = 0; i < 12; i++) months[i] += c.qty.months[i]; });
+    outlook.byMetric.qty.months = months;
+    outlook.byMetric.qty.total = months.reduce((s, v) => s + v, 0);
+  }
+  return [...filled];
+}
+function _applyCatQtyAdjust(outlook, execution, catAdjust, currentMonth) {
+  // v46: 추가 물량은 마감되지 않은 잔여월(currentMonth+1~12월)에 현재 물량 비율대로 배부하고,
+  //      kg당 매출·원재료비·변동비는 그대로 두므로 공헌이익 증감만큼 영업이익(전망 OP)도 함께 변한다.
+  //      반환한 축종별 배율을 비연동 집계에도 적용해 판가 인상 효과(비연동 물량 × 조정폭)에 물량 변화가 반영된다.
+  const factors = {};
+  if (!catAdjust || !outlook?.byCategory) return factors;
+  const cm = Math.max(0, Math.min(12, Number(currentMonth) || 0));
   Object.keys(catAdjust).forEach(cat => {
     const delta = Number(catAdjust[cat]) || 0;
-    if (delta === 0) return;
-    if (!outlook.byCategory[cat]) return;
-    const catData = outlook.byCategory[cat];
-    if (!catData.qty || !catData.qty.months) return;
-    // 기존 판매량 합계
-    const origQtyTotal = catData.qty.total || catData.qty.months.reduce((s,v)=>s+v, 0);
-    if (origQtyTotal <= 0) return;
-    // 1) 판매량 월별 균등 배부
-    const monthlyAdd = delta / 12;
-    catData.qty.months = catData.qty.months.map(v => v + monthlyAdd);
-    catData.qty.total = catData.qty.months.reduce((s, v) => s + v, 0);
-    // 2) 매출/원가/변동비 등은 판매량 비율로 비례 조정 (단위당 변동비/매출은 동일 가정)
-    const scaleFactor = (origQtyTotal + delta) / origQtyTotal;
-    ['rev', 'rawMat', 'mfgVar', 'salesVar'].forEach(m => {
-      if (catData[m]?.months) {
-        catData[m].months = catData[m].months.map(v => v * scaleFactor);
-        catData[m].total = catData[m].months.reduce((s, v) => s + v, 0);
-      }
-    });
-    // 3) byMetric의 합계도 갱신 — 차이만큼 더해줌
-    if (outlook.byMetric.qty?.months) {
-      for (let i = 0; i < 12; i++) outlook.byMetric.qty.months[i] += monthlyAdd;
-      outlook.byMetric.qty.total = outlook.byMetric.qty.months.reduce((s, v) => s + v, 0);
-    }
-    ['rev', 'rawMat', 'mfgVar', 'salesVar'].forEach(m => {
-      if (outlook.byMetric[m]?.months && catData[m]?.months) {
-        // outlook 전체 = sum of cats. 추가된 부분만 더함
-        // 이전 cat 매출과 비교가 어렵기 때문에 단순히 cat 매출 차이만큼 보정
-      }
-    });
+    const q = outlook.byCategory[cat]?.qty?.months;
+    if (delta === 0 || !q || cm >= 12) return;
+    const openQty = q.slice(cm).reduce((s, v) => s + (v || 0), 0);
+    if (openQty <= 0) return;
+    factors[cat] = Math.max(0, 1 + delta / openQty);
   });
-  // 안전한 방식: byMetric을 모든 cat 합으로 재계산 (qty 외 metric도)
-  ['rev', 'rawMat', 'mfgVar', 'salesVar', 'qty'].forEach(m => {
-    if (!outlook.byMetric[m]) return;
-    const months = Array(12).fill(0);
-    Object.keys(outlook.byCategory).forEach(c => {
-      const cm = outlook.byCategory[c]?.[m];
-      if (cm?.months) for (let i = 0; i < 12; i++) months[i] += cm.months[i];
-    });
-    if (months.some(v => v !== 0)) {
-      outlook.byMetric[m].months = months;
-      outlook.byMetric[m].total = months.reduce((s, v) => s + v, 0);
+  _applyQtyFactors(outlook, factors, cm);
+  return factors;
+}
+function _applyQtyFactors(agg, factors, currentMonth) {
+  if (!agg || !factors || !Object.keys(factors).length) return;
+  const cm = Math.max(0, Math.min(12, Number(currentMonth) || 0));
+  const scaleBucket = (b, f) => {
+    if (!b) return;
+    const sumM = (m, a, z) => (b[m]?.months || []).slice(a, z).reduce((s, v) => s + (v || 0), 0);
+    // 실행계획에 원가 행이 없으면(매출·OP만 제출) 마감월 실적의 공헌이익률로 물량 효과를 잡는다
+    const openCost = ['rawMat', 'mfgVar', 'salesVar'].some(m => Math.abs(sumM(m, cm, 12)) > 0);
+    const closedRev = sumM('rev', 0, cm);
+    const cmRatio = closedRev ? (closedRev - sumM('rawMat', 0, cm) - sumM('mfgVar', 0, cm) - sumM('salesVar', 0, cm)) / closedRev : 0;
+    for (let i = cm; i < 12; i++) {
+      const d = {};
+      ['qty', 'rev', 'rawMat', 'mfgVar', 'salesVar'].forEach(m => {
+        if (!b[m]?.months) return;
+        d[m] = b[m].months[i] * (f - 1);
+        b[m].months[i] += d[m];
+      });
+      const dCm = openCost ? (d.rev || 0) - (d.rawMat || 0) - (d.mfgVar || 0) - (d.salesVar || 0) : (d.rev || 0) * cmRatio; // 고정비는 물량과 무관
+      if (b.gp?.months) b.gp.months[i] += openCost ? (d.rev || 0) - (d.rawMat || 0) - (d.mfgVar || 0) : dCm;
+      ['op', 'opCalc'].forEach(m => { if (b[m]?.months) b[m].months[i] += dCm; });
     }
+    ['qty', 'rev', 'rawMat', 'mfgVar', 'salesVar', 'gp', 'op', 'opCalc'].forEach(m => {
+      if (b[m]?.months) b[m].total = b[m].months.reduce((s, v) => s + v, 0);
+    });
+  };
+  Object.entries(factors).forEach(([cat, f]) => {
+    scaleBucket(agg.byCategory?.[cat], f);
+    Object.values(agg.byMid || {}).forEach(r => { if (r.cat1 === cat) scaleBucket(r.metrics, f); });
+    Object.values(agg.bySmall || {}).forEach(r => { if (r.cat1 === cat) scaleBucket(r.metrics, f); });
+  });
+  // 전사 합계는 축종 합으로 다시 계산
+  ['qty', 'rev', 'rawMat', 'mfgVar', 'salesVar', 'gp', 'op', 'opCalc'].forEach(m => {
+    if (!agg.byMetric?.[m]?.months) return;
+    const months = Array(12).fill(0);
+    Object.values(agg.byCategory).forEach(c => { if (c?.[m]?.months) for (let i = 0; i < 12; i++) months[i] += c[m].months[i]; });
+    agg.byMetric[m].months = months;
+    agg.byMetric[m].total = months.reduce((s, v) => s + v, 0);
   });
 }
 
-/* === 설정 변경 시 (축종별 물량 조정 등) 재집계 (v39 개정) ===
-   v39: 비연동 필터는 더 이상 메인 집계에 적용되지 않음.
-        모든 화면·비교·달성률은 전체 데이터(연동+비연동 합산) 기준.
-        판가 적용 산식만 별도 DATA.aggNonLinked 사용. */
 function reaggregateWithOptions() {
   if (!DATA.loaded || !DATA.raw) return;
   // 메인 집계: 항상 전체 (연동+비연동 합산)
@@ -13357,7 +13683,9 @@ function reaggregateWithOptions() {
   _deriveGP(aActual); _deriveGP(aExec); _deriveGP(aPlan);
   const aOutlook = _buildOutlook(aActual, aExec, DATA.currentMonth || 0);
   _deriveGP(aOutlook);
-  _applyCatQtyAdjust(aOutlook, aExec, STATE.catQtyAdjust);
+  DATA.qtyFilledFromPlan = _fillOpenQtyFromPlan(aOutlook, aPlan, DATA.currentMonth || 0);
+  DATA.costFilledFromPlan = _fillOpenCostsFromPlan(aOutlook, aPlan, DATA.currentMonth || 0);
+  const qtyFactors = _applyCatQtyAdjust(aOutlook, aExec, STATE.catQtyAdjust, DATA.currentMonth || 0);
 
   DATA.agg = { actual: aActual, execution: aExec, plan: aPlan, outlook: aOutlook };
 
@@ -13373,6 +13701,9 @@ function reaggregateWithOptions() {
   _deriveGP(aActualNL); _deriveGP(aExecNL); _deriveGP(aPlanNL);
   const aOutlookNL = _buildOutlook(aActualNL, aExecNL, DATA.currentMonth || 0);
   _deriveGP(aOutlookNL);
+  _fillOpenQtyFromPlan(aOutlookNL, aPlanNL, DATA.currentMonth || 0);
+  _fillOpenCostsFromPlan(aOutlookNL, aPlanNL, DATA.currentMonth || 0);
+  _applyQtyFactors(aOutlookNL, qtyFactors, DATA.currentMonth || 0);
   DATA.aggNonLinked = { actual: aActualNL, execution: aExecNL, plan: aPlanNL, outlook: aOutlookNL };
   // 화면 갱신
   if (typeof renderAll === 'function') {
@@ -13455,6 +13786,277 @@ function _buildOutlook(actualAgg, executionAgg, currentMonth) {
   return outlook;
 }
 
+/* === v48: '실행계획 Platform' 통합 파일 (BD · 비연동 Spread · 판가조정 시트) ===
+   실적·실행계획·사업계획 시트가 따로 없고 BD 시트에 축종 × 손익항목 월별 값(톤·백만원)이 모여 있는 파일.
+   P&L(SKU) 시트는 '수동 계산' 모드로 저장돼 캐시 값이 비어 있거나 덜 계산된 경우가 있어 쓰지 않는다. */
+const PLATFORM_SHEETS = ['BD', '비연동 Spread', '판가조정'];
+function _isPlatformSheetSet(names) {
+  return (names || []).includes('BD') && !(names || []).some(n => /실행계획/.test(n));
+}
+function _readDpdsWorkbook(data, type) {
+  // 47MB급 Platform 파일을 통째로 파싱하면 브라우저가 멈추므로 필요한 시트만 읽는다
+  try {
+    const names = XLSX.read(data, { type, bookSheets: true }).SheetNames || [];
+    if (_isPlatformSheetSet(names)) return XLSX.read(data, { type, sheets: PLATFORM_SHEETS.filter(n => names.includes(n)) });
+  } catch (e) { console.warn('[DPDS] 시트 목록 선확인 실패 — 전체 파싱', e); }
+  return XLSX.read(data, { type });
+}
+/* v48: P&L 시트(117MB XML)는 SheetJS로 통째로 읽으면 브라우저 메모리를 넘는다.
+   zip에서 그 시트만 스트리밍으로 풀어 '판매량' 행의 대분류·연동제·26년 월별 값만 모은다(엑셀 인상분 계산과 같은 품목 물량). */
+function _zipFindEntry(u8, name) {
+  const dv = new DataView(u8.buffer, u8.byteOffset, u8.byteLength);
+  let eocd = -1;
+  for (let i = u8.length - 22; i >= Math.max(0, u8.length - 65557); i--) if (dv.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
+  if (eocd < 0) return null;
+  const cnt = dv.getUint16(eocd + 10, true);
+  let off = dv.getUint32(eocd + 16, true);
+  const dec = new TextDecoder();
+  for (let k = 0; k < cnt && off + 46 <= u8.length; k++) {
+    if (dv.getUint32(off, true) !== 0x02014b50) return null;
+    const method = dv.getUint16(off + 10, true), csize = dv.getUint32(off + 20, true);
+    const nlen = dv.getUint16(off + 28, true), xlen = dv.getUint16(off + 30, true), clen = dv.getUint16(off + 32, true);
+    const lho = dv.getUint32(off + 42, true);
+    if (dec.decode(u8.subarray(off + 46, off + 46 + nlen)) === name) {
+      const start = lho + 30 + dv.getUint16(lho + 26, true) + dv.getUint16(lho + 28, true);
+      return { method, data: u8.subarray(start, start + csize) };
+    }
+    off += 46 + nlen + xlen + clen;
+  }
+  return null;
+}
+async function _zipEntryChunks(u8, name, onText) {
+  const e = _zipFindEntry(u8, name);
+  if (!e) return false;
+  if (e.method === 0) { onText(new TextDecoder().decode(e.data)); return true; }
+  if (e.method !== 8 || typeof DecompressionStream === 'undefined') return false;
+  const reader = new Blob([e.data]).stream().pipeThrough(new DecompressionStream('deflate-raw')).pipeThrough(new TextDecoderStream()).getReader();
+  for (;;) { const { done, value } = await reader.read(); if (done) break; onText(value); }
+  return true;
+}
+const _xmlUnescape = t => t.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&amp;/g, '&');
+async function _zipEntryText(u8, name) { let t = ''; return (await _zipEntryChunks(u8, name, c => { t += c; })) ? t : null; }
+function _colIndex(letters) { let n = 0; for (const ch of letters) n = n * 26 + ch.charCodeAt(0) - 64; return n - 1; }
+async function _readPlatformPnlQty(u8, sheetName = 'P&L') {
+  try {
+    const wbXml = await _zipEntryText(u8, 'xl/workbook.xml');
+    const rels = await _zipEntryText(u8, 'xl/_rels/workbook.xml.rels');
+    if (!wbXml || !rels) return null;
+    const esc = sheetName.replace(/&/g, '&amp;');
+    const rid = (wbXml.match(new RegExp(`<sheet[^>]*name="${esc.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"[^>]*>`)) || [])[0]?.match(/r:id="([^"]+)"/)?.[1];
+    const rel = rid && [...rels.matchAll(/<Relationship\b[^>]*>/g)].map(m => m[0]).find(r => r.includes(`Id="${rid}"`));
+    const target = rel?.match(/Target="([^"]+)"/)?.[1];
+    if (!target) return null;
+    const path = target.startsWith('/') ? target.slice(1) : 'xl/' + target;
+    const ssXml = await _zipEntryText(u8, 'xl/sharedStrings.xml') || '';
+    const ss = [...ssXml.matchAll(/<si>([\s\S]*?)<\/si>/g)].map(m => _xmlUnescape(m[1].replace(/<rPh[\s\S]*?<\/rPh>/g, '').replace(/<t[^>]*>([\s\S]*?)<\/t>/g, '$1').replace(/<[^>]+>/g, '')));
+    let col = null, buf = '';
+    const out = {};
+    const cellsOf = rowXml => {
+      const cells = {};
+      for (const m of rowXml.matchAll(/<c r="([A-Z]+)\d+"([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g)) {
+        const v = m[3]?.match(/<v>([^<]*)<\/v>/)?.[1] ?? m[3]?.match(/<t[^>]*>([^<]*)<\/t>/)?.[1];
+        if (v == null) continue;
+        cells[_colIndex(m[1])] = /t="s"/.test(m[2]) ? ss[+v] : _xmlUnescape(v);
+      }
+      return cells;
+    };
+    const onRow = rowXml => {
+      const c = cellsOf(rowXml);
+      if (!col) {   // 머리글 행: 대분류·연동제·구분1_고정·'26.01~'26.12(첫 묶음)
+        const vals = Object.entries(c).map(([i, v]) => [+i, _normalizeCell(v)]);
+        const find = h => vals.find(([, v]) => v === h)?.[0];
+        if (find('구분1_고정') == null || find('대분류') == null) return;
+        const yy = (vals.find(([, v]) => /^\d{2}\.01$/.test(v)) || [])[1]?.slice(0, 2);
+        const months = {};
+        vals.sort((a, b) => a[0] - b[0]).forEach(([i, v]) => { const m = v.match(/^(\d{2})\.(\d{2})$/); if (m && m[1] === yy && !(+m[2] in months)) months[+m[2]] = i; });
+        col = { cat: find('대분류'), linked: find('연동제'), metric: find('구분1_고정'), months };
+        return;
+      }
+      if (_normalizeCell(c[col.metric]) !== '판매량') return;
+      const cat = String(c[col.cat] ?? '').trim();
+      if (!cat) return;
+      const side = _normalizeCell(c[col.linked]) === '연동' ? 'L' : 'N';
+      if (!out[cat]) out[cat] = { L: Array(12).fill(0), N: Array(12).fill(0) };
+      Object.entries(col.months).forEach(([mon, i]) => { out[cat][side][mon - 1] += Number(c[i]) || 0; });
+    };
+    const ok = await _zipEntryChunks(u8, path, chunk => {
+      buf += chunk;
+      const end = buf.lastIndexOf('</row>');
+      if (end < 0) return;
+      const done = buf.slice(0, end + 6);
+      buf = buf.slice(end + 6);
+      for (const m of done.matchAll(/<row\b[^>]*>([\s\S]*?)<\/row>/g)) onRow(m[1]);
+    });
+    return ok && Object.keys(out).length ? out : null;
+  } catch (e) {
+    console.warn('[DPDS] P&L 시트 판매량 판독 실패 — 비연동 Spread 비중 사용', e);
+    return null;
+  }
+}
+function _binaryStringToBytes(s) {
+  const u8 = new Uint8Array(s.length);
+  for (let i = 0; i < s.length; i++) u8[i] = s.charCodeAt(i) & 255;
+  return u8;
+}
+
+function _platformMetricKey(code) {
+  const s = _normalizeCell(code);
+  if (!s || s.includes('공헌이익') || s.includes('매출할인') || /^\d+\.매출$/.test(s)) return null; // 총매출·할인은 순매출액 행에 포함
+  if (s.includes('영업이익')) return 'op';
+  if (s.includes('매출중량') || s === '판매량') return 'qty';
+  if (s === '순매출액') return 'rev';
+  if (s.includes('(관리)')) return 'ga';
+  if (s.includes('(판매)')) return s.endsWith('_변동') ? 'salesVar' : 'salesFix';
+  if (s.includes('원재료비') || s.includes('품목외주') || s.includes('감모')) return 'rawMat';   // 26계획 손익구분과 같은 분류
+  if (s.endsWith('_변동') || s.includes('부재료비') || s.includes('재료비_상품')) return 'mfgVar';
+  if (/^\d+\./.test(s)) return 'mfgFix';
+  return null;
+}
+function _platformLinkedShare(wb) {
+  // 비연동 Spread 시트의 매출중량으로 축종·월별 연동 물량 비중을 구한다(실적월만 있음 → 나머지 월은 실적 누계 비중)
+  const ws = wb.Sheets['비연동 Spread'];
+  if (!ws) return null;
+  const json = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });
+  const hIdx = json.findIndex((r, i) => i < 15 && Array.isArray(r) && r.some(c => _normalizeCell(c) === '연동제'));
+  if (hIdx < 0) return null;
+  const head = json[hIdx].map(_normalizeCell);
+  const catCol = head.findIndex(c => c.includes('대분류명'));
+  const linkCol = head.indexOf('연동제');
+  const monCols = {};
+  [json[hIdx], json[hIdx + 1] || []].forEach(r => r.forEach((c, j) => {
+    const m = String(c ?? '').replace(/^'/, '').trim().match(/^\d{2}\.(\d{1,2})$/);
+    if (m && !(+m[1] in monCols)) monCols[+m[1]] = j;
+  }));
+  if (catCol < 0 || !Object.keys(monCols).length) return null;
+  const q = {};
+  json.slice(hIdx + 1).forEach(r => {
+    if (!Array.isArray(r) || !_normalizeCell(r[0]).includes('매출중량')) return;
+    const cat = String(r[catCol] ?? '').trim();
+    if (!cat) return;
+    const side = _normalizeCell(r[linkCol]) === '연동' ? 'L' : 'N';
+    if (!q[cat]) q[cat] = { L: Array(12).fill(0), N: Array(12).fill(0) };
+    Object.entries(monCols).forEach(([mon, j]) => { q[cat][side][mon - 1] += _toNum(r[j]); });
+  });
+  const out = {};
+  Object.entries(q).forEach(([cat, { L, N }]) => {
+    const sL = L.reduce((a, b) => a + b, 0), sN = N.reduce((a, b) => a + b, 0);
+    const avg = sL + sN > 0 ? sL / (sL + sN) : 0;
+    out[cat] = { months: L.map((l, i) => (l + N[i] > 0 ? l / (l + N[i]) : avg)), avg };
+  });
+  return out;
+}
+function _platformExecPriceAdj(wb) {
+  // 판가조정 시트: 실행계획에 이미 들어간 축종별 판가 조정(원/kg) — 화면 안내용
+  const ws = wb.Sheets['판가조정'];
+  if (!ws) return null;
+  const json = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });
+  const hIdx = json.findIndex((r, i) => i < 10 && Array.isArray(r) && r.some(c => _normalizeCell(c) === '대분류'));
+  if (hIdx < 0) return null;
+  const catCol = json[hIdx].findIndex(c => _normalizeCell(c) === '대분류');
+  const monCols = _detectMonthColumns(json[hIdx]);
+  const out = {};
+  json.slice(hIdx + 1).forEach(r => {
+    const cat = String(r?.[catCol] ?? '').trim();
+    if (!cat) return;
+    Object.entries(monCols).forEach(([mon, j]) => {
+      const v = _toNum(r[j]);
+      if (v) { if (!out[cat]) out[cat] = {}; out[cat][mon] = Math.max(out[cat][mon] || 0, v); }
+    });
+  });
+  return Object.keys(out).length ? out : null;
+}
+function _parsePlatformWorkbook(wb) {
+  const ws = wb.Sheets['BD'];
+  if (!ws) throw new Error('BD 시트를 읽지 못했습니다.');
+  const json = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null, blankrows: true });
+  const hIdx = json.findIndex((r, i) => i < 20 && Array.isArray(r) && r.some(c => _normalizeCell(c) === '손익항목'));
+  if (hIdx < 1) throw new Error('BD 시트에서 "손익항목" 머리글 행을 찾지 못했습니다.');
+  const head = json[hIdx], groupRow = json[hIdx - 1] || [];
+  const metricCol = head.findIndex(c => _normalizeCell(c) === '손익항목');
+  const catCol = head.findIndex(c => _normalizeCell(c) === '축종');
+  if (metricCol < 0 || catCol < 0) throw new Error('BD 시트에 "축종"·"손익항목" 열이 없습니다.');
+  // 윗줄 구분('26년 실적'·'26년 실행계획'·'26년 사업계획'·'25년 실적')은 병합 셀일 수 있어 앞 값을 이어 쓴다
+  const groups = [];
+  let last = '';
+  for (let j = 0; j < head.length; j++) { const g = _normalizeCell(groupRow[j]); if (g) last = g; groups[j] = last; }
+  const yy = (groups.map(g => g.match(/^(\d{2,4})년실행계획/)).find(Boolean) || groups.map(g => g.match(/^(\d{2,4})년사업계획/)).find(Boolean) || [])[1];
+  if (!yy) throw new Error('BD 시트에서 "OO년 실행계획/사업계획" 구분을 찾지 못했습니다.');
+  const cols = { actual: {}, exec: {}, plan: {} };
+  head.forEach((h, j) => {
+    const m = String(h ?? '').trim().match(/^(\d{1,2})\s*월$/);
+    const g = groups[j];
+    if (!m || !g.startsWith(yy + '년')) return;
+    const key = g.includes('실행계획') ? 'exec' : g.includes('사업계획') ? 'plan' : g.includes('실적') ? 'actual' : null;
+    if (key && !(+m[1] in cols[key])) cols[key][+m[1]] = j;
+  });
+  const actualMonths = Object.keys(cols.actual).map(Number);
+  const cm = actualMonths.length ? Math.max(...actualMonths) : 0;
+  if (!Object.keys(cols.plan).length) throw new Error('BD 시트에 사업계획 월 열이 없습니다.');
+  const share = _platformLinkedShare(wb);
+  // 실행계획 월(마감월 이후)은 P&L 시트 품목별 판매량으로 연동/비연동을 나눈다 — 엑셀 판가 인상 효과와 같은 물량
+  let pnlShareMonths = [];
+  if (share && wb.__pnlQty) {
+    Object.entries(wb.__pnlQty).forEach(([cat, { L, N }]) => {
+      if (!share[cat]) return;
+      for (let m = cm + 1; m <= 12; m++) {
+        const t = L[m - 1] + N[m - 1];
+        if (t > 0) { share[cat].months[m - 1] = L[m - 1] / t; if (!pnlShareMonths.includes(m)) pnlShareMonths.push(m); }
+      }
+    });
+  }
+  const rows = { actual: [], exec: [], plan: [] };
+  json.slice(hIdx + 1).forEach(r => {
+    if (!Array.isArray(r)) return;
+    const cat = String(r[catCol] ?? '').trim();
+    const key = _platformMetricKey(r[metricCol]);
+    if (!cat || !key) return;
+    const unit = key === 'qty' ? 1000 : 1e6;               // BD 단위: 톤·백만원 → 프로그램 단위 kg·원
+    const val = j => _toNum(r[j]) * unit;
+    const act = Array.from({ length: 12 }, (_, i) => ((i + 1) in cols.actual ? val(cols.actual[i + 1]) : 0));
+    const exe = act.map((v, i) => (i + 1 > cm && (i + 1) in cols.exec ? val(cols.exec[i + 1]) : v));
+    const pln = Array.from({ length: 12 }, (_, i) => ((i + 1) in cols.plan ? val(cols.plan[i + 1]) : 0));
+    const sh = share?.[cat];
+    [['actual', act], ['exec', exe], ['plan', pln]].forEach(([k, months]) => {
+      // shortcut: 연동/비연동은 물량 비중으로 모든 손익항목을 나눈다 — 비연동 Spread 시트에 실행계획·사업계획 월이 들어오면 항목별 분할로 바꿀 것
+      const ratio = i => (sh ? (k === 'plan' ? sh.avg : sh.months[i]) : 0);
+      const parts = sh
+        ? [['연동', months.map((v, i) => v * ratio(i))], ['비연동', months.map((v, i) => v * (1 - ratio(i)))]]
+        : [['비연동', months]];
+      parts.forEach(([linked, mm]) => rows[k].push({
+        cat1: cat, cat2: '_', cat3: '_', item: '', itemCode: '', plant: '', linked,
+        metric: String(r[metricCol]).trim(), metricKey: key, months: mm, total: mm.reduce((a, b) => a + b, 0)
+      }));
+    });
+  });
+  if (!rows.plan.length) throw new Error('BD 시트에서 손익항목 행을 찾지 못했습니다.');
+  // 실행계획 잔여월에는 판가조정 시트의 인상(예: 11월 +8원)이 이미 들어 있다 → 빼서 '인상 전' 전망으로 맞춘다
+  //   (엑셀에서 판가 인상 적용을 끈 값과 같은 기준. 인상은 MODE 3 회차로 다시 넣는다)
+  const execPriceAdj = _platformExecPriceAdj(wb);
+  let execPriceAdjRemovedWon = 0;
+  if (execPriceAdj) {
+    const nlQty = {};
+    rows.exec.forEach(r => { if (r.metricKey === 'qty' && r.linked !== '연동') nlQty[r.cat1] = r.months; });
+    rows.exec.forEach(r => {
+      if (r.linked === '연동' || (r.metricKey !== 'rev' && r.metricKey !== 'op') || !execPriceAdj[r.cat1] || !nlQty[r.cat1]) return;
+      let cum = 0;
+      for (let m = cm + 1; m <= 12; m++) {          // 마감월까지의 인상은 이미 실적이라 그대로 둔다
+        cum += execPriceAdj[r.cat1][m] || 0;
+        const won = cum * (nlQty[r.cat1][m - 1] || 0);
+        r.months[m - 1] -= won;
+        if (r.metricKey === 'op') execPriceAdjRemovedWon += won;
+      }
+      r.total = r.months.reduce((a, b) => a + b, 0);
+    });
+  }
+  return {
+    rows, cm, year: yy,
+    linkedFromSpread: !!share,
+    noLinkedCats: Object.keys(share || {}).length ? [...new Set(rows.plan.map(x => x.cat1))].filter(c => !share[c]) : [],
+    execPriceAdj, execPriceAdjRemovedWon, pnlShareMonths: pnlShareMonths.sort((a, b) => a - b),
+    execMonths: Object.keys(cols.exec).map(Number)
+  };
+}
+
 /* === 메인: 워크북 → DATA === */
 function ingestWorkbook(wb, src, fileName) {
   // ─── 시트명 동적 매칭 (한글/영문/연도 표기 변동 대응) ───
@@ -13466,9 +14068,16 @@ function ingestWorkbook(wb, src, fileName) {
     return null;
   };
   // 우선순위: 정확 매칭 → 부분 매칭
-  const sActual = findSheet([/^.*실적.*$/, /actual/i, /^.*Actual.*$/]);
-  const sExec   = findSheet([/^.*실행계획.*$/, /execution/i, /forecast/i]);
-  const sPlan   = findSheet([/^.*사업계획.*$/, /^.*목표.*$/, /^.*예산.*$/, /plan/i, /budget/i]);
+  // v48: 실적·실행계획·사업계획 시트 대신 BD 시트가 있는 '실행계획 Platform' 파일
+  const platform = _isPlatformSheetSet(wb.SheetNames) ? _parsePlatformWorkbook(wb) : null;
+  let sActual = findSheet([/^.*실적.*$/, /actual/i, /^.*Actual.*$/]);
+  let sExec   = findSheet([/^.*실행계획.*$/, /execution/i, /forecast/i]);
+  let sPlan   = findSheet([/^.*사업계획.*$/, /^.*목표.*$/, /^.*예산.*$/, /plan/i, /budget/i]);
+  if (platform) {
+    sActual = `BD (${platform.year}년 실적 1~${platform.cm}월)`;
+    sExec = `BD (${platform.year}년 실행계획 ${platform.execMonths.join('·')}월)`;
+    sPlan = `BD (${platform.year}년 사업계획)`;
+  }
 
   if (!sActual || !sExec || !sPlan) {
     const missing = [];
@@ -13488,12 +14097,16 @@ function ingestWorkbook(wb, src, fileName) {
   } catch(e) {}
 
   let rowsActual, rowsExec, rowsPlan;
-  try { rowsActual = _parseTemplateSheet(wb.Sheets[sActual], sActual); }
-  catch(e) { throw new Error(`[실적 시트 파싱 실패] ${e.message}`); }
-  try { rowsExec = _parseTemplateSheet(wb.Sheets[sExec], sExec); }
-  catch(e) { throw new Error(`[실행계획 시트 파싱 실패] ${e.message}`); }
-  try { rowsPlan = _parseTemplateSheet(wb.Sheets[sPlan], sPlan); }
-  catch(e) { throw new Error(`[사업계획 시트 파싱 실패] ${e.message}`); }
+  if (platform) {
+    ({ actual: rowsActual, exec: rowsExec, plan: rowsPlan } = platform.rows);
+  } else {
+    try { rowsActual = _parseTemplateSheet(wb.Sheets[sActual], sActual); }
+    catch(e) { throw new Error(`[실적 시트 파싱 실패] ${e.message}`); }
+    try { rowsExec = _parseTemplateSheet(wb.Sheets[sExec], sExec); }
+    catch(e) { throw new Error(`[실행계획 시트 파싱 실패] ${e.message}`); }
+    try { rowsPlan = _parseTemplateSheet(wb.Sheets[sPlan], sPlan); }
+    catch(e) { throw new Error(`[사업계획 시트 파싱 실패] ${e.message}`); }
+  }
 
   // v39 핵심 변경: 메인 집계(DATA.agg)는 항상 전체 데이터(연동+비연동 합산)
   //   - 현황 진단·손익 비교·트리거·Spread Gap·달성률 모두 전체 데이터 사용
@@ -13523,6 +14136,7 @@ function ingestWorkbook(wb, src, fileName) {
   if (sample) {
     for (let i = 11; i >= 0; i--) if (sample.months[i] !== 0) { lastM = i + 1; break; }
   }
+  if (platform) lastM = platform.cm;   // BD 시트 '실적' 열 수가 마감월
 
   // v41: 빈 템플릿 감지 — 분류·헤더는 있으나 월별 수치가 전부 0/공란인 경우
   //   (업로드 파일이 '판가인상 미적용' 빈 템플릿이거나, 수치 셀이 비어있을 때
@@ -13562,11 +14176,13 @@ function ingestWorkbook(wb, src, fileName) {
 
   const aOutlook = _buildOutlook(aActual, aExec, lastM);
   _deriveGP(aOutlook);
+  const qtyFilledFromPlan = _fillOpenQtyFromPlan(aOutlook, aPlan, lastM);
+  const costFilledFromPlan = _fillOpenCostsFromPlan(aOutlook, aPlan, lastM);
 
   // 축종별 추가 물량(±) 반영 (v32)
-  if (typeof STATE !== 'undefined' && STATE.catQtyAdjust) {
-    _applyCatQtyAdjust(aOutlook, aExec, STATE.catQtyAdjust);
-  }
+  const qtyFactors = (typeof STATE !== 'undefined' && STATE.catQtyAdjust)
+    ? _applyCatQtyAdjust(aOutlook, aExec, STATE.catQtyAdjust, lastM)
+    : {};
 
   // v39: 비연동 분리 집계 (판가 인상/인하 적용 산식 전용)
   const aActualNL = _aggregate(rowsNonL_Actual);
@@ -13575,6 +14191,9 @@ function ingestWorkbook(wb, src, fileName) {
   _deriveGP(aActualNL); _deriveGP(aExecNL); _deriveGP(aPlanNL);
   const aOutlookNL = _buildOutlook(aActualNL, aExecNL, lastM);
   _deriveGP(aOutlookNL);
+  _fillOpenQtyFromPlan(aOutlookNL, aPlanNL, lastM);
+  _fillOpenCostsFromPlan(aOutlookNL, aPlanNL, lastM);
+  _applyQtyFactors(aOutlookNL, qtyFactors, lastM);
 
   // v35: aggRaw는 이제 메인과 동일하지만 호환성 위해 유지 (검증 패널이 참조)
   const aActualRaw = aActual;
@@ -13587,6 +14206,12 @@ function ingestWorkbook(wb, src, fileName) {
 
   DATA = {
     loaded: true,
+    qtyFilledFromPlan,
+    costFilledFromPlan,
+    platformInfo: platform ? {
+      cm: platform.cm, execMonths: platform.execMonths, linkedFromSpread: platform.linkedFromSpread,
+      noLinkedCats: platform.noLinkedCats, execPriceAdj: platform.execPriceAdj, execPriceAdjRemovedWon: platform.execPriceAdjRemovedWon, pnlShareMonths: platform.pnlShareMonths
+    } : null,
     source: src,
     fileName: fileName || (src === 'sample' ? '샘플 데이터' : '업로드 파일'),
     uploadedAt: fmt.date(),
@@ -13624,6 +14249,8 @@ function ingestWorkbook(wb, src, fileName) {
   if (typeof STATE !== 'undefined') {
     STATE.manualSchedule = null;
     STATE.catManualAmounts = null;
+    STATE.catSchedules = {};   // v48: 축종별 수기 회차도 리셋 (마감월이 바뀌면 이미 지난 달 회차가 남음)
+    if (DATA.platformInfo?.execPriceAdj) applyExecPriceAdjToMode3(true);   // 엑셀 판가조정 값을 시작값으로
   }
   return DATA;
 }
@@ -14816,10 +15443,11 @@ function handleUpload(event) {
   const prevSkuCount = DATA.skuCount || 0;
 
   const reader = new FileReader();
-  reader.onload = e => {
+  reader.onload = async e => {
     try {
       const t0 = performance.now();
-      const wb = XLSX.read(e.target.result, { type: 'binary' });
+      const wb = _readDpdsWorkbook(e.target.result, 'binary');
+      if (_isPlatformSheetSet(wb.SheetNames)) wb.__pnlQty = await _readPlatformPnlQty(_binaryStringToBytes(e.target.result));
       ingestWorkbook(wb, 'upload', file.name);
       const ms = (performance.now() - t0).toFixed(0);
       STATE.realdata = true;
