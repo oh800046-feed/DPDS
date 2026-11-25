@@ -5806,6 +5806,7 @@ let STATE = {
   adjustmentAxisV25: false       // v25 조정폭 축(인상·인하·동결) 마이그레이션 여부
 };
 
+const dpdsDefaultState = JSON.parse(JSON.stringify(STATE));
 /* ---------- 2. 영구 저장 ---------- */
 function save() { try { if (typeof dpdsSealAll === 'function') dpdsSealAll(); localStorage.setItem('dpds_v2_state', JSON.stringify(STATE)); } catch(e) { if (e && (e.name === 'QuotaExceededError' || e.code === 22) && typeof dpdsOnQuota === 'function') dpdsOnQuota(); } }
 /* CI 이미지 경로 */
@@ -11683,6 +11684,8 @@ function handleTrackingUpload(event) {
       // ingestWorkbook을 직접 부르면 DATA가 갱신되므로, 임시 워크북을 별도 파싱
       // 간편하게 그대로 ingestWorkbook 호출 → DATA 갱신 + 새로운 currentMonth 등 자동 반영
       ingestWorkbook(wb, 'upload', file.name);
+      dpdsFile = {data: DATA, file};
+      ++dpdsLoadVersion;
       STATE.realdata = true;
       const ms = (performance.now() - t0).toFixed(0);
 
@@ -15512,6 +15515,8 @@ function handleUpload(event) {
       const wb = _readDpdsWorkbook(e.target.result, 'binary');
       if (_isPlatformSheetSet(wb.SheetNames)) wb.__pnlQty = await _readPlatformPnlQty(_binaryStringToBytes(e.target.result));
       ingestWorkbook(wb, 'upload', file.name);
+      dpdsFile = {data: DATA, file};
+      ++dpdsLoadVersion;
       const ms = (performance.now() - t0).toFixed(0);
       STATE.realdata = true;
 
@@ -15887,206 +15892,187 @@ window.addEventListener('DOMContentLoaded', () => {
 
 
 <script>
-async function saveDpdsResultToSupabase(file) {
-  if (!window.supabaseClient) {
-    throw new Error('Supabase client가 초기화되지 않았습니다.');
-  }
+// DPDS shared saves: immutable workbook plus ordered state changes.
+const dpdsClone = value => JSON.parse(JSON.stringify(value));
+let dpdsSession = null;
+let dpdsFile = null;
+let dpdsBusy = null;
+let dpdsRetry = null;
+let dpdsLoadVersion = 0;
 
-  // Preserve the original filename in metadata; use an ASCII-only Storage key.
-  const extensionMatch = String(file.name).match(/\.([a-zA-Z0-9]{1,10})$/);
-  const extension = extensionMatch ? '.' + extensionMatch[1].toLowerCase() : '';
-  const randomBytes = crypto.getRandomValues(new Uint8Array(16));
-  const uploadId = Array.from(randomBytes, b => b.toString(16).padStart(2, '0')).join('');
-  const filePath = `uploads/${Date.now()}_${uploadId}${extension}`;
-
-  const { error: uploadError } = await window.supabaseClient.storage
-    .from('dpds-files')
-    .upload(filePath, file, {
-      cacheControl: '3600',
-      upsert: false
-    });
-
-  if (uploadError) throw uploadError;
-
-  const payload = {
-    fileName: file.name,
-    uploadedAt: new Date().toISOString(),
-    data: DATA,
-    state: STATE,
-    summary: {
-      currentMonth: DATA.currentMonth || null,
-      skuCount: DATA.skuCount || 0,
-      rowsActual: DATA.rowsActual || 0,
-      rowsExec: DATA.rowsExec || 0,
-      rowsPlan: DATA.rowsPlan || 0,
-      agg: DATA.agg || null
-    }
-  };
-
-  const { error: insertError } = await window.supabaseClient
-    .from('dpds_uploads')
-    .insert({
-      file_name: file.name,
-      file_path: filePath,
-      current_month: DATA.currentMonth || null,
-      sku_count: DATA.skuCount || 0,
-      result: payload,
-      state: STATE,
-      is_active: true
-    });
-
-  if (insertError) throw insertError;
-}
-
-async function loadLatestDpdsResultFromSupabase() {
-  if (!window.supabaseClient) return;
-
-  const { data, error } = await window.supabaseClient
-    .from('dpds_uploads')
-    .select('*')
-    .eq('is_active', true)
-    .order('uploaded_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  if (error) {
-    console.error('Supabase 최신 결과 불러오기 실패:', error);
-    return;
-  }
-
-  if (!data) return;
-
-  if (data.result && data.result.data && typeof DATA !== 'undefined') {
-    Object.assign(DATA, data.result.data);
-  }
-
-  if (data.state && typeof STATE !== 'undefined') {
-    Object.assign(STATE, data.state);
-    if (STATE.startMonthOverride == null || Number(STATE.startMonthOverride) === 5) STATE.startMonthOverride = 8;
-  }
-
-  if (typeof DATA !== 'undefined' && DATA.loaded && DATA.raw && typeof reaggregateWithOptions === 'function') {
-    try { reaggregateWithOptions(); }
-    catch (e) { console.warn('[DPDS] 온라인 데이터 재집계 실패:', e); }
-  }
-
-  if (typeof recomputeAndRefresh === 'function') {
-    recomputeAndRefresh();
-  }
-
-  if (typeof showToast === 'function') {
-    showToast(`공유 데이터 불러옴: ${data.file_name}`, 'ok');
-  }
-}
-
-async function saveDpdsCurrentStateToSupabase() {
-  if (!window.supabaseClient) {
-    if (typeof showToast === 'function') showToast('Supabase 연결 설정을 확인해 주세요.', 'err');
-    return false;
-  }
-
-  const btn = document.getElementById('dpdsOnlineSaveBtn');
-  const oldText = btn ? btn.innerHTML : '';
-  let saved = false;
-  if (btn) { btn.disabled = true; btn.innerHTML = '<span>온라인</span><span>저장중</span>'; }
-
-  try {
-    const payload = {
-      fileName: DATA && DATA.fileName ? DATA.fileName : 'manual-save',
-      uploadedAt: new Date().toISOString(),
-      source: 'manual-save',
-      data: DATA,
-      state: STATE,
-      summary: {
-        currentMonth: DATA && DATA.currentMonth || null,
-        skuCount: DATA && DATA.skuCount || 0,
-        rowsActual: DATA && DATA.rowsActual || 0,
-        rowsExec: DATA && DATA.rowsExec || 0,
-        rowsPlan: DATA && DATA.rowsPlan || 0,
-        agg: DATA && DATA.agg || null
+function dpdsChanges(before, after) {
+  const changes = [];
+  function walk(a, b, path) {
+    if (JSON.stringify(a) === JSON.stringify(b)) return;
+    if (a && b && typeof a === 'object' && typeof b === 'object' && !Array.isArray(a) && !Array.isArray(b)) {
+      for (const key of new Set([...Object.keys(a), ...Object.keys(b)])) {
+        if (!Object.hasOwn(b, key)) changes.push({ path: [...path, key], remove: true });
+        else walk(a[key], b[key], [...path, key]);
       }
-    };
-
-    const { error } = await window.supabaseClient
-      .from('dpds_uploads')
-      .insert({
-        file_name: payload.fileName,
-        file_path: null,
-        current_month: payload.summary.currentMonth,
-        sku_count: payload.summary.skuCount,
-        result: payload,
-        state: STATE,
-        is_active: true
-      });
-
-    if (error) throw error;
-    saved = true;
-    if (btn) btn.innerHTML = '<span>온라인</span><span>저장완료</span>';
-    if (typeof showToast === 'function') showToast('온라인 저장 완료', 'ok');
-    return true;
-  } catch (err) {
-    console.error('Supabase 수동 저장 실패:', err);
-    if (typeof showToast === 'function') showToast('온라인 저장 실패: ' + err.message, 'err');
-    return false;
-  } finally {
-    if (btn) {
-      btn.disabled = false;
-      if (!saved) btn.innerHTML = oldText;
-    }
+    } else changes.push({ path, value: b });
+  }
+  walk(before, after, []);
+  return changes;
+}
+function dpdsApply(state, changes) {
+  for (const op of changes) {
+    if (!Array.isArray(op.path) || !op.path.length || op.path.some(k => typeof k !== 'string' || ['__proto__','constructor','prototype'].includes(k))) throw Error('변경 내역 형식 오류');
+    let obj = state;
+    for (const key of op.path.slice(0,-1)) obj = obj[key];
+    const last = op.path[op.path.length-1];
+    if (op.remove) delete obj[last]; else obj[last] = op.value;
   }
 }
-
-async function loadDpdsLatestFromSupabaseButton() {
-  if (!window.supabaseClient) {
-    if (typeof showToast === 'function') showToast('Supabase 연결 설정을 확인해 주세요.', 'err');
-    return false;
+function dpdsResult(response) {
+  if (response.error) throw response.error;
+  return response.data;
+}
+async function dpdsLatestId() {
+  const row = dpdsResult(await window.supabaseClient.from('dpds_uploads').select('id').eq('is_active',true).order('uploaded_at',{ascending:false}).order('id',{ascending:false}).limit(1).maybeSingle());
+  return row?.id || null;
+}
+async function dpdsWriteBlob(blob, type) {
+  const digest = new Uint8Array(await crypto.subtle.digest('SHA-256',await blob.arrayBuffer()));
+  const path = 'sources/' + Array.from(digest,x=>x.toString(16).padStart(2,'0')).join('') + '.' + type;
+  const bucket = window.supabaseClient.storage.from('dpds-files');
+  const exists = await bucket.exists(path);
+  if (exists.data !== true) {
+    const {error} = await bucket.upload(path,blob,{upsert:false});
+    if (error && !(/duplicate|already exists/i.test(error.message) || Number(error.statusCode) === 409)) throw error;
   }
-
-  const btn = document.getElementById('dpdsOnlineLoadBtn');
-  const oldText = btn ? btn.innerHTML : '';
-  if (btn) { btn.disabled = true; btn.innerHTML = '불러오는 중...'; }
-
+  return path;
+}
+async function dpdsPersist() {
+  const current = DATA;
+  const session = dpdsSession?.data === current ? dpdsSession : null;
+  const state = dpdsClone(STATE);
+  const entry = {file_name:current.fileName || 'manual-save',current_month:current.currentMonth || null,sku_count:current.skuCount || 0};
+  const pending = dpdsRetry;
+  if (pending && pending.data === current) {
+    const head = await dpdsLatestId();
+    if (head === pending.id) dpdsSession = {...pending, head};
+    dpdsRetry = null;
+    if (head === pending.id) return dpdsPersist();
+  }
+  let parent, base;
+  const id = crypto.randomUUID();
+  if (session) {
+    const changes = dpdsChanges(session.state,state);
+    if (!changes.length) return false;
+    parent = session.head;
+    base = session.base;
+    entry.file_path = 'changes/' + base;
+    entry.result = {format:'dpds-delta-v1',base,changes};
+  } else {
+    parent = await dpdsLatestId();
+    const file = dpdsFile?.data === current ? dpdsFile.file : null;
+    const blob = file || new Blob([JSON.stringify(current)],{type:'application/json'});
+    const kind = file ? 'workbook' : 'snapshot';
+    entry.file_path = await dpdsWriteBlob(blob, file ? 'xlsx' : 'json');
+    entry.result = {format:'dpds-base-v1',kind};
+    entry.state = state;
+    base = id;
+  }
+  const record = {id,head:id,base,state,data:current};
+  dpdsRetry = record;
+  dpdsResult(await window.supabaseClient.rpc('dpds_append_save',{p_id:id,p_parent:parent,p_entry:entry}));
+  dpdsRetry = null;
+  if (current === DATA) dpdsSession = record;
+  return true;
+}
+function dpdsEnqueue() {
+  if (!window.supabaseClient) return Promise.reject(Error('공유 저장 서버 연결을 확인해 주세요.'));
+  const next = (dpdsBusy || Promise.resolve()).catch(()=>{}).then(dpdsPersist);
+  dpdsBusy = next;
+  return next.finally(()=>{if(dpdsBusy === next) dpdsBusy = null;});
+}
+function saveDpdsResultToSupabase(file) {
+  dpdsFile = {data:DATA,file};
+  ++dpdsLoadVersion;
+  return dpdsEnqueue();
+}
+async function saveDpdsCurrentStateToSupabase() {
+  const btn = document.getElementById('dpdsOnlineSaveBtn');
+  const label = btn.innerHTML;
+  btn.disabled = true;
+  btn.textContent = '저장 중';
   try {
-    const { data, error } = await window.supabaseClient
-      .from('dpds_uploads')
-      .select('*')
-      .eq('is_active', true)
-      .order('uploaded_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (error) throw error;
-    if (!data) {
-      if (typeof showToast === 'function') showToast('불러올 온라인 데이터가 없습니다.', 'err');
-      return false;
-    }
-
-    if (data.result && data.result.data && typeof DATA !== 'undefined') Object.assign(DATA, data.result.data);
-    if (data.state && typeof STATE !== 'undefined') {
-      Object.assign(STATE, data.state);
-      if (STATE.startMonthOverride == null || Number(STATE.startMonthOverride) === 5) STATE.startMonthOverride = 8;
-    }
-
-    if (typeof DATA !== 'undefined' && DATA.loaded && DATA.raw && typeof reaggregateWithOptions === 'function') {
-      try { reaggregateWithOptions(); }
-      catch (e) { console.warn('[DPDS] 온라인 데이터 재집계 실패:', e); }
-    }
-
-    if (typeof recomputeAndRefresh === 'function') recomputeAndRefresh();
-    if (typeof save === 'function') save();
-    if (typeof showToast === 'function') showToast(`온라인 데이터 불러오기 완료: ${data.file_name}`, 'ok');
+    const changed = await dpdsEnqueue();
+    btn.innerHTML = '<span>온라인</span><span>저장완료</span>';
+    showToast(changed ? '온라인 저장 완료' : '변경사항 없음','ok');
     return true;
-  } catch (err) {
-    console.error('Supabase 수동 불러오기 실패:', err);
-    if (typeof showToast === 'function') showToast('온라인 불러오기 실패: ' + err.message, 'err');
+  } catch(e) {
+    btn.innerHTML = label;
+    showToast('온라인 저장 실패: ' + e.message,'err');
     return false;
-  } finally {
-    if (btn) {
-      btn.disabled = false;
-      if (!saved) btn.innerHTML = oldText;
+  } finally { btn.disabled = false; }
+}
+async function dpdsReadRow(id) {
+  return dpdsResult(await window.supabaseClient.from('dpds_uploads').select('id,result,state,file_path,file_name,sku_count').eq('id',id).single());
+}
+async function loadLatestDpdsResultFromSupabase(manual = false) {
+  if (!window.supabaseClient || dpdsBusy) return false;
+  const changed = () => dpdsSession && (dpdsSession.data !== DATA || dpdsChanges(dpdsSession.state,dpdsClone(STATE)).length);
+  if (!manual && (changed() || (!dpdsSession && dpdsFile))) return false;
+  const version = ++dpdsLoadVersion;
+  const startData = DATA;
+  const startState = JSON.stringify(STATE);
+  const head = await dpdsLatestId();
+  if (!head || (!manual && head === dpdsSession?.head)) return false;
+  const latest = await dpdsReadRow(head);
+  const base = latest.result?.format === 'dpds-delta-v1' ? latest.result.base : head;
+  const row = base === head ? latest : await dpdsReadRow(base);
+  const state = dpdsClone(row.state || row.result?.state || {});
+  if (base !== head) {
+    let found = false;
+    for (let offset=0; !found; offset+=100) {
+      const batch = dpdsResult(await window.supabaseClient.from('dpds_uploads').select('id,result').eq('file_path','changes/'+base).order('uploaded_at').order('id').range(offset,offset+99));
+      for (const rev of batch) {
+        dpdsApply(state,rev.result.changes);
+        if (rev.id === head) { found=true; break; }
+      }
+      if (!found && batch.length < 100) throw Error('저장 변경 내역 누락');
     }
   }
+  let wb, snapshot;
+  const reuse = dpdsSession?.base === base && dpdsSession.data === DATA;
+  if (!reuse) {
+    if (row.result?.format === 'dpds-base-v1') {
+      const blob = dpdsResult(await window.supabaseClient.storage.from('dpds-files').download(row.file_path));
+      if (row.result.kind === 'snapshot') snapshot = JSON.parse(await blob.text());
+      else {
+        const bytes = new Uint8Array(await blob.arrayBuffer());
+        wb = typeof _readDpdsWorkbook === 'function' ? _readDpdsWorkbook(bytes,'array') : XLSX.read(bytes,{type:'array'});
+        if (typeof _isPlatformSheetSet === 'function' && _isPlatformSheetSet(wb.SheetNames)) wb.__pnlQty = await _readPlatformPnlQty(bytes);
+      }
+    } else snapshot = row.result?.data;
+    if (!wb && !snapshot) throw Error('원본 데이터를 불러올 수 없습니다.');
+  }
+  if (version !== dpdsLoadVersion || dpdsBusy || DATA !== startData || JSON.stringify(STATE) !== startState) return false;
+  const oldState = STATE, oldData = DATA;
+  try {
+    STATE = {...dpdsClone(dpdsDefaultState),...state};
+    if (wb) { ingestWorkbook(wb,'upload',row.file_name); DATA.skuCount = row.sku_count; }
+    else if (snapshot) DATA = snapshot;
+    STATE = {...dpdsClone(dpdsDefaultState),...state};
+    if (DATA.loaded && DATA.raw) reaggregateWithOptions();
+    recomputeAndRefresh();
+    save();
+  } catch(e) { STATE=oldState; DATA=oldData; throw e; }
+  dpdsSession = {head,base,state:dpdsClone(STATE),data:DATA};
+  dpdsFile = null;
+  showToast('공유 데이터 불러옴: '+row.file_name,'ok');
+  return true;
 }
+async function loadDpdsLatestFromSupabaseButton() {
+  const btn = document.getElementById('dpdsOnlineLoadBtn');
+  const label = btn.innerHTML;
+  btn.disabled=true;
+  try { return await loadLatestDpdsResultFromSupabase(true); }
+  catch(e) { showToast('온라인 불러오기 실패: '+e.message,'err'); return false; }
+  finally { btn.disabled=false; btn.innerHTML=label; }
+}
+
 function subscribeDpdsRealtime() {
   if (!window.supabaseClient) return;
 
@@ -16100,14 +16086,14 @@ function subscribeDpdsRealtime() {
         table: 'dpds_uploads'
       },
       function () {
-        loadLatestDpdsResultFromSupabase();
+        loadLatestDpdsResultFromSupabase().catch(e=>console.warn('DPDS 공유 데이터 불러오기 실패',e.message));
       }
     )
     .subscribe();
 }
 
 window.addEventListener('DOMContentLoaded', function () {
-  loadLatestDpdsResultFromSupabase();
+  loadLatestDpdsResultFromSupabase().catch(e=>console.warn('DPDS 공유 데이터 불러오기 실패',e.message));
   subscribeDpdsRealtime();
 });
 </script>
